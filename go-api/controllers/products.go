@@ -9,11 +9,11 @@ import (
 )
 import "poc-gin/models"
 
-type Handler struct {
+type ProductHandler struct {
 	Service *services.ProductService
 }
 
-func (h *Handler) FindProduct(c *gin.Context) {
+func (h *ProductHandler) FindProduct(c *gin.Context) {
 	products, err := h.Service.GetAllProducts()
 	if err != nil {
 		log.Println(err)
@@ -23,7 +23,7 @@ func (h *Handler) FindProduct(c *gin.Context) {
 	c.JSON(http.StatusOK, products)
 }
 
-func (h *Handler) FindOneProduct(c *gin.Context) {
+func (h *ProductHandler) FindOneProduct(c *gin.Context) {
 	id := c.Param("id")
 	product, err := h.Service.GetProduct(id)
 	if err != nil {
@@ -34,7 +34,7 @@ func (h *Handler) FindOneProduct(c *gin.Context) {
 	c.JSON(200, product)
 }
 
-func (h *Handler) CreateProduct(c *gin.Context) {
+func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	var input models.Product
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -49,7 +49,7 @@ func (h *Handler) CreateProduct(c *gin.Context) {
 	c.JSON(201, product)
 }
 
-func (h *Handler) UpdateProduct(c *gin.Context) {
+func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	id := c.Param("id")
 	var product models.Product
 	product, err := h.Service.GetProduct(id)
@@ -71,7 +71,7 @@ func (h *Handler) UpdateProduct(c *gin.Context) {
 	c.JSON(200, product)
 }
 
-func (h *Handler) DeleteProduct(c *gin.Context) {
+func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	id := c.Param("id")
 	err := h.Service.DeleteProduct(id)
 	if err != nil {

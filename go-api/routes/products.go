@@ -2,21 +2,24 @@ package routes
 
 import (
 	"poc-gin/controllers"
+	"poc-gin/middlewares"
 
 	"github.com/gin-gonic/gin"
 )
 
 // SetupRoutes configure toutes les routes de l'application
-func SetupRoutes(r *gin.Engine, h *controllers.Handler) {
+func SetupProductRoutes(r *gin.Engine, productHandler *controllers.ProductHandler) {
 
-	r.GET("/products", h.FindProduct)
+	r.GET("/products", productHandler.FindProduct)
+	r.GET("/products/:id", productHandler.FindOneProduct)
+	protected := r.Group("/products")
+	protected.Use(middlewares.AuthMiddleware())
+	{
+		r.POST("/products", productHandler.CreateProduct)
 
-	r.GET("/products/:id", h.FindOneProduct)
+		r.PUT("/products/:id", productHandler.UpdateProduct)
 
-	r.POST("/products", h.CreateProduct)
-
-	r.PUT("/products/:id", h.UpdateProduct)
-
-	r.DELETE("/products/:id", h.DeleteProduct)
+		r.DELETE("/products/:id", productHandler.DeleteProduct)
+	}
 
 }

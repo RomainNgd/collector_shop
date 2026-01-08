@@ -21,13 +21,20 @@ func main() {
 	database.ConnectDB()
 
 	database.DB.AutoMigrate(&models.Product{})
+	database.DB.AutoMigrate(&models.User{})
 
-	h := &controllers.Handler{
-		Service: services.NewProductService(),
-	}
 	r := gin.Default()
 
-	routes.SetupRoutes(r, h)
+	productHandler := &controllers.ProductHandler{
+		Service: services.NewProductService(),
+	}
+
+	authHandler := &controllers.AuthHandler{
+		Service: services.NewAuthService(),
+	}
+
+	routes.SetupProductRoutes(r, productHandler)
+	routes.SetupAuthRoutes(r, authHandler)
 
 	r.Run(":8080")
 }
