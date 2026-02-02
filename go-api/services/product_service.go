@@ -10,8 +10,10 @@ type ProductService struct {
 	DB *gorm.DB
 }
 
-func NewProductService() *ProductService {
-	return &ProductService{}
+func NewProductService(db *gorm.DB) *ProductService {
+	return &ProductService{
+		DB: db,
+	}
 }
 
 func (s *ProductService) GetAllProducts() ([]models.Product, error) {

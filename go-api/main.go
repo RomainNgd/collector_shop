@@ -26,11 +26,11 @@ func main() {
 	r := gin.Default()
 
 	productHandler := &controllers.ProductHandler{
-		Service: services.NewProductService(),
+		Service: services.NewProductService(database.DB),
 	}
 
 	authHandler := &controllers.AuthHandler{
-		Service: services.NewAuthService(),
+		Service: services.NewAuthService(database.DB),
 	}
 
 	routes.SetupProductRoutes(r, productHandler)

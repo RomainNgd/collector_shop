@@ -9,7 +9,7 @@ import (
 // SetupRoutes configure toutes les routes de l'application
 func SetupAuthRoutes(r *gin.Engine, authHandler *controllers.AuthHandler) {
 
-	r.GET("/login", authHandler.Login)
-	r.GET("/register", authHandler.Register)
+	r.POST("/login", authHandler.Login)
+	r.POST("/register", authHandler.Register)
 
 }
