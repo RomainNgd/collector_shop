@@ -1,9 +1,11 @@
 package services
 
 import (
+	"context"
 	"errors"
-	"os"
+	"fmt"
 	"poc-gin/models"
+	"poc-gin/pkg/constants"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -11,46 +13,82 @@ import (
 	"gorm.io/gorm"
 )
 
-type AuthService struct {
-	DB *gorm.DB
+var (
+	ErrEmailAlreadyUsed    = errors.New("email already used")
+	ErrInvalidCredentials  = errors.New("invalid credentials")
+	ErrUserNotFound        = errors.New("user not found")
+)
+
+type AuthServiceInterface interface {
+	Login(email, password string) (string, error)
+	Register(email, password string) (*models.User, error)
 }
 
-func NewAuthService(db *gorm.DB) *AuthService {
+type AuthService struct {
+	db        *gorm.DB
+	jwtSecret string
+}
+
+func NewAuthService(db *gorm.DB, jwtSecret string) *AuthService {
 	return &AuthService{
-		DB: db,
+		db:        db,
+		jwtSecret: jwtSecret,
 	}
 }
 
-func (s *AuthService) Register(user models.User) (models.User, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+func (s *AuthService) Register(email, password string) (*models.User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), constants.DBTimeout)
+	defer cancel()
+
+	user := &models.User{
+		Email: email,
+		Role:  constants.RoleUser,
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return user, err
+		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 	user.Password = string(hashedPassword)
 
-	result := s.DB.Create(&user)
-	return user, result.Error
+	result := s.db.WithContext(ctx).Create(user)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
+			return nil, ErrEmailAlreadyUsed
+		}
+		return nil, fmt.Errorf("failed to create user: %w", result.Error)
+	}
+
+	return user, nil
 }
 
 func (s *AuthService) Login(email, password string) (string, error) {
-	var user models.User
+	ctx, cancel := context.WithTimeout(context.Background(), constants.DBTimeout)
+	defer cancel()
 
-	result := s.DB.Where("email = ?", email).First(&user)
+	var user models.User
+	result := s.db.WithContext(ctx).Where("email = ?", email).First(&user)
 	if result.Error != nil {
-		return "", errors.New("utilisateur introuvable")
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return "", ErrInvalidCredentials
+		}
+		return "", fmt.Errorf("database error: %w", result.Error)
 	}
 
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
-	if err != nil {
-		return "", errors.New("mot de passe incorrect")
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return "", ErrInvalidCredentials
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user.ID,
-		"exp": time.Now().Add(time.Hour * 24).Unix(),
+		"sub":  user.ID,
+		"role": user.Role,
+		"exp":  time.Now().Add(constants.JWTExpirationHours * time.Hour).Unix(),
 	})
 
-	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	tokenString, err := token.SignedString([]byte(s.jwtSecret))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign token: %w", err)
+	}
 
-	return tokenString, err
+	return tokenString, nil
 }

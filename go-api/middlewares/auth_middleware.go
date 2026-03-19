@@ -3,42 +3,88 @@ package middlewares
 import (
 	"fmt"
 	"net/http"
-	"os"
+	"poc-gin/controllers"
+	"poc-gin/pkg/constants"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func AuthMiddleware() gin.HandlerFunc {
+type AuthMiddleware struct {
+	jwtSecret string
+}
+
+func NewAuthMiddleware(jwtSecret string) *AuthMiddleware {
+	return &AuthMiddleware{jwtSecret: jwtSecret}
+}
+
+func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header requis"})
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			controllers.RespondError(c, http.StatusUnauthorized, "AUTH_HEADER_INVALID", "Invalid authorization header", nil)
+			c.Abort()
 			return
 		}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		if tokenString == "" {
+			controllers.RespondError(c, http.StatusUnauthorized, "TOKEN_MISSING", "Missing token", nil)
+			c.Abort()
+			return
+		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("méthode de signature inattendue: %v", token.Header["alg"])
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return []byte(os.Getenv("JWT_SECRET")), nil
+			return []byte(m.jwtSecret), nil
 		})
 
 		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token invalide"})
+			controllers.RespondError(c, http.StatusUnauthorized, "TOKEN_INVALID", "Invalid token", nil)
+			c.Abort()
 			return
 		}
 
-		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			if float64(time.Now().Unix()) > claims["exp"].(float64) {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token expiré"})
-				return
-			}
-			c.Set("userID", claims["sub"])
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			controllers.RespondError(c, http.StatusUnauthorized, "CLAIMS_INVALID", "Invalid claims", nil)
+			c.Abort()
+			return
+		}
+
+		sub, exists := claims["sub"]
+		if !exists {
+			controllers.RespondError(c, http.StatusUnauthorized, "TOKEN_SUB_MISSING", "Missing subject claim", nil)
+			c.Abort()
+			return
+		}
+
+		c.Set(constants.ContextKeyUserID, sub)
+
+		if role, ok := claims["role"].(string); ok {
+			c.Set(constants.ContextKeyUserRole, role)
+		}
+
+		c.Next()
+	}
+}
+
+func (m *AuthMiddleware) RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get(constants.ContextKeyUserRole)
+		if !exists {
+			controllers.RespondError(c, http.StatusForbidden, "ROLE_MISSING", "User role missing", nil)
+			c.Abort()
+			return
+		}
+
+		if role != constants.RoleAdmin {
+			controllers.RespondError(c, http.StatusForbidden, "ADMIN_REQUIRED", "Admin access required", nil)
+			c.Abort()
+			return
 		}
 
 		c.Next()

@@ -1,45 +1,64 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
-	"poc-gin/models"
+	"poc-gin/pkg/logger"
 	"poc-gin/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 type AuthHandler struct {
-	Service *services.AuthService
+	authService services.AuthServiceInterface
+}
+
+func NewAuthHandler(authService services.AuthServiceInterface) *AuthHandler {
+	return &AuthHandler{authService: authService}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
-	var input models.User
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
 		return
 	}
 
-	user, err := h.Service.Register(input)
+	user, err := h.authService.Register(req.Email, req.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de créer l'utilisateur"})
+		if errors.Is(err, services.ErrEmailAlreadyUsed) {
+			RespondError(c, http.StatusConflict, "EMAIL_ALREADY_USED", "Email already registered", nil)
+			return
+		}
+		logger.Error("Failed to register user: %v", err)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create user", nil)
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"email": user.Email, "id": user.ID})
+	RespondSuccess(c, http.StatusCreated, gin.H{
+		"id":    user.ID,
+		"email": user.Email,
+		"role":  user.Role,
+	})
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
-	var input models.User // On réutilise le struct User juste pour binder email/pass
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
 		return
 	}
 
-	token, err := h.Service.Login(input.Email, input.Password)
+	token, err := h.authService.Login(req.Email, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Email ou mot de passe invalide"})
+		if errors.Is(err, services.ErrInvalidCredentials) {
+			RespondError(c, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password", nil)
+			return
+		}
+		logger.Error("Login error: %v", err)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Login failed", nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	RespondSuccess(c, http.StatusOK, gin.H{"token": token})
 }

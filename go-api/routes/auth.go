@@ -6,10 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SetupRoutes configure toutes les routes de l'application
 func SetupAuthRoutes(r *gin.Engine, authHandler *controllers.AuthHandler) {
-
-	r.POST("/login", authHandler.Login)
-	r.POST("/register", authHandler.Register)
-
+	auth := r.Group("/auth")
+	{
+		auth.POST("/login", authHandler.Login)
+		auth.POST("/register", authHandler.Register)
+	}
 }
