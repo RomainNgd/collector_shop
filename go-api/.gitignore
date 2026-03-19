@@ -1,0 +1,33 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE files
+.idea/
+.vscode/
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.coverprofile
+coverage.out
+cover.out
+
+# Binary outputs
+bin/
+dist/
+build/
+
+# Logs and temp files
+*.log
+tmp/
+temp/
+
+# Runtime uploads
+upload/
