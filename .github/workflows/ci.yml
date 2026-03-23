@@ -99,7 +99,7 @@ jobs:
   build-and-scan:
     name: Build And Security Scan
     runs-on: ubuntu-latest
-fix      permissions:
+    permissions:
       contents: read
       security-events: write
     needs:
