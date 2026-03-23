@@ -117,7 +117,7 @@ jobs:
         shell: bash
         run: |
           echo "IMAGE_TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
-          echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY_OWNER}" >> "$GITHUB_ENV"
+          echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
 
       - name: Build Docker images
         env:
