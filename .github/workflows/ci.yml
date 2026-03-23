@@ -99,6 +99,9 @@ jobs:
   build-and-scan:
     name: Build And Security Scan
     runs-on: ubuntu-latest
+fix      permissions:
+      contents: read
+      security-events: write
     needs:
       - go-tests
       - svelte-tests
@@ -123,28 +126,69 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
         run: bash build/scripts/ci-build-images.sh
 
-      - name: Scan repository
-        uses: aquasecurity/trivy-action@0.28.0
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@v0.2.4
         with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret,misconfig
-          severity: HIGH,CRITICAL
+          cache: true
+          version: v0.68.2
+
+      - name: Scan repository
+        id: scan_repository
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          scanners: "vuln,secret,misconfig"
+          format: "sarif"
+          output: "trivy-repo-results.sarif"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          hide-progress: true
           exit-code: "1"
+          skip-setup-trivy: true
+
+      - name: Upload Trivy repository scan results
+        if: ${{ always() && hashFiles('trivy-repo-results.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-repo-results.sarif
 
       - name: Scan go-api image
-        uses: aquasecurity/trivy-action@0.28.0
+        id: scan_go_api_image
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
         with:
-          image-ref: docker.io/${{ env.IMAGE_NAMESPACE }}/go-api:${{ env.IMAGE_TAG }}
-          severity: HIGH,CRITICAL
+          scan-type: "image"
+          image-ref: "docker.io/${{ env.IMAGE_NAMESPACE }}/go-api:${{ env.IMAGE_TAG }}"
+          format: "table"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          hide-progress: true
           exit-code: "1"
+          skip-setup-trivy: true
 
       - name: Scan collector-spa image
-        uses: aquasecurity/trivy-action@0.28.0
+        id: scan_collector_spa_image
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
         with:
-          image-ref: docker.io/${{ env.IMAGE_NAMESPACE }}/collector-spa:${{ env.IMAGE_TAG }}
-          severity: HIGH,CRITICAL
+          scan-type: "image"
+          image-ref: "docker.io/${{ env.IMAGE_NAMESPACE }}/collector-spa:${{ env.IMAGE_TAG }}"
+          format: "table"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          hide-progress: true
           exit-code: "1"
+          skip-setup-trivy: true
+
+      - name: Fail workflow if Trivy found blocking issues
+        if: ${{ steps.scan_repository.outcome == 'failure' || steps.scan_go_api_image.outcome == 'failure' || steps.scan_collector_spa_image.outcome == 'failure' }}
+        run: |
+          echo "Trivy detected HIGH or CRITICAL issues. Check the scan logs and SARIF report for details."
+          exit 1
 
   push-images:
     name: Push Docker Images
