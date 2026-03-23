@@ -6,7 +6,13 @@ import {
 	type ApiProduct,
 	type AuthUser
 } from '$lib/types';
-import { API_BASE_URL, buildApiHeaders, getApiErrorMessage, readApiResponse } from '$lib/server/api';
+import {
+	API_BASE_URL,
+	API_PUBLIC_BASE_URL,
+	buildApiHeaders,
+	getApiErrorMessage,
+	readApiResponse
+} from '$lib/server/api';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -254,7 +260,7 @@ const loadProducts = async (fetchFn: typeof fetch) => {
 		throw error(502, 'Format de reponse API invalide pour les produits');
 	}
 
-	return result.payload.data.map((item) => mapApiProduct(item, API_BASE_URL));
+	return result.payload.data.map((item) => mapApiProduct(item, API_PUBLIC_BASE_URL));
 };
 
 const loadCategories = async (fetchFn: typeof fetch) => {

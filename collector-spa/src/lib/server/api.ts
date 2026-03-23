@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 
 export const API_BASE_URL = env.API_BASE_URL ?? 'http://localhost:8080';
+export const API_PUBLIC_BASE_URL = env.API_PUBLIC_BASE_URL ?? API_BASE_URL;
 
 export type ApiErrorPayload = {
 	message?: string;

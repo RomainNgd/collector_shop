@@ -1,4 +1,4 @@
-import { API_BASE_URL, readApiResponse } from '$lib/server/api';
+import { API_BASE_URL, API_PUBLIC_BASE_URL, readApiResponse } from '$lib/server/api';
 import { error } from '@sveltejs/kit';
 import { mapApiProduct, type ApiProduct } from '$lib/types';
 
@@ -15,7 +15,7 @@ export const load = async ({ fetch }) => {
 		throw error(502, 'Format de reponse API invalide');
 	}
 
-	const products = payload.data.map((item) => mapApiProduct(item, API_BASE_URL));
+	const products = payload.data.map((item) => mapApiProduct(item, API_PUBLIC_BASE_URL));
 
 	return { products };
 };

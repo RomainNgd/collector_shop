@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: collector-shop-config
+data:
+  DB_PORT: "5432"
+  DB_AUTO_MIGRATE: "true"
+  MAX_FILE_SIZE: "5242880"
+  API_PORT: "8080"
+  SPA_PORT: "3000"
+  API_BASE_URL: "http://go-api:8080"
+  API_PUBLIC_BASE_URL: "http://collector.local"
