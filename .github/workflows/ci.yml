@@ -124,7 +124,7 @@ jobs:
         run: bash build/scripts/ci-build-images.sh
 
       - name: Setup Trivy
-        uses: aquasecurity/setup-trivy@v0.2.2
+        uses: aquasecurity/setup-trivy@v0.2.4
 
       - name: Scan repository
         run: bash build/scripts/ci-security-scan.sh
