@@ -123,19 +123,28 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
         run: bash build/scripts/ci-build-images.sh
 
-      - name: Setup Trivy
-        uses: aquasecurity/setup-trivy@v0.2.4
-
       - name: Scan repository
-        run: bash build/scripts/ci-security-scan.sh
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
 
-      - name: Scan built images
-        env:
-          SCAN_MODE: images
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-          IMAGE_NAMESPACE: ${{ env.IMAGE_NAMESPACE }}
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-        run: bash build/scripts/ci-security-scan.sh
+      - name: Scan go-api image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: docker.io/${{ env.IMAGE_NAMESPACE }}/go-api:${{ env.IMAGE_TAG }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Scan collector-spa image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: docker.io/${{ env.IMAGE_NAMESPACE }}/collector-spa:${{ env.IMAGE_TAG }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
 
   push-images:
     name: Push Docker Images
