@@ -127,15 +127,17 @@ jobs:
         run: bash build/scripts/ci-build-images.sh
 
       - name: Set up Trivy
-        uses: aquasecurity/setup-trivy@v0.2.4
+        # setup-trivy v0.2.6
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
         with:
           cache: true
-          version: v0.68.2
+          version: v0.69.3
 
       - name: Scan repository
         id: scan_repository
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.33.1
+        # trivy-action v0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           scan-type: "fs"
           scan-ref: "."
@@ -157,7 +159,8 @@ jobs:
       - name: Scan go-api image
         id: scan_go_api_image
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.33.1
+        # trivy-action v0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           scan-type: "image"
           image-ref: "docker.io/${{ env.IMAGE_NAMESPACE }}/go-api:${{ env.IMAGE_TAG }}"
@@ -172,7 +175,8 @@ jobs:
       - name: Scan collector-spa image
         id: scan_collector_spa_image
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.33.1
+        # trivy-action v0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           scan-type: "image"
           image-ref: "docker.io/${{ env.IMAGE_NAMESPACE }}/collector-spa:${{ env.IMAGE_TAG }}"
