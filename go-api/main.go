@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -26,9 +27,29 @@ func main() {
 		logger.Fatal("Failed to load configuration: %v", err)
 	}
 
+	command := "serve"
+	if len(os.Args) > 1 {
+		command = os.Args[1]
+	}
+
+	switch command {
+	case "serve":
+		if err := runServer(cfg); err != nil {
+			logger.Fatal("Server startup failed: %v", err)
+		}
+	case "seed":
+		if err := runSeed(cfg); err != nil {
+			logger.Fatal("Database seed failed: %v", err)
+		}
+	default:
+		logger.Fatal("Unknown command %q. Available commands: serve, seed", command)
+	}
+}
+
+func runServer(cfg *config.Config) error {
 	db, err := database.New(&cfg.Database)
 	if err != nil {
-		logger.Fatal("Failed to connect to database: %v", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -38,15 +59,15 @@ func main() {
 
 	if cfg.Database.AutoMigrate {
 		logger.Info("Running database migrations...")
-		if err := db.AutoMigrate(&models.Category{}, &models.Product{}, &models.User{}); err != nil {
-			logger.Fatal("Database migration failed: %v", err)
+		if err := migrateDatabase(db.DB); err != nil {
+			return fmt.Errorf("database migration failed: %w", err)
 		}
 		logger.Info("Database migrations completed")
 	}
 
 	fileService, err := services.NewFileService(&cfg.Upload)
 	if err != nil {
-		logger.Fatal("Failed to initialize file service: %v", err)
+		return fmt.Errorf("failed to initialize file service: %w", err)
 	}
 
 	categoryService := services.NewCategoryService(db.DB)
@@ -90,8 +111,43 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		logger.Fatal("Server forced to shutdown: %v", err)
+		return fmt.Errorf("server forced to shutdown: %w", err)
 	}
 
 	logger.Info("Server stopped gracefully")
+	return nil
+}
+
+func runSeed(cfg *config.Config) error {
+	db, err := database.New(&cfg.Database)
+	if err != nil {
+		return fmt.Errorf("failed to connect to database: %w", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			logger.Error("Failed to close database: %v", err)
+		}
+	}()
+
+	logger.Info("Running database migrations before seed...")
+	if err := migrateDatabase(db.DB); err != nil {
+		return fmt.Errorf("database migration failed: %w", err)
+	}
+
+	var report *database.SeedReport
+	if err := db.DB.Transaction(func(tx *gorm.DB) error {
+		var seedErr error
+		report, seedErr = database.SeedDemoData(tx, cfg.Upload.Dir)
+		return seedErr
+	}); err != nil {
+		return err
+	}
+
+	logger.Info("Demo data seeded successfully: %s", report.Summary())
+	logger.Info("Seeded accounts: admin@collector.local / Admin123!, user@collector.local / User123!, collector@collector.local / Collector123!")
+	return nil
+}
+
+func migrateDatabase(db *gorm.DB) error {
+	return db.AutoMigrate(&models.Category{}, &models.Product{}, &models.User{})
 }

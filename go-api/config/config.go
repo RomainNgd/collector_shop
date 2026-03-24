@@ -47,11 +47,11 @@ func Load() (*Config, error) {
 			Port: getEnv("PORT", "8080"),
 		},
 		Database: DatabaseConfig{
-			Host:        getEnv("DB_HOST", ""),
-			Port:        getEnv("DB_PORT", ""),
-			User:        getEnv("DB_USER", ""),
-			Password:    getEnv("DB_PASSWORD", ""),
-			Name:        getEnv("DB_NAME", ""),
+			Host:        getEnv("DB_HOST", "127.0.0.1"),
+			Port:        getEnv("DB_PORT", "5432"),
+			User:        getEnv("DB_USER", "golang"),
+			Password:    getEnv("DB_PASSWORD", "golang"),
+			Name:        getEnv("DB_NAME", "ecommerce"),
 			AutoMigrate: getEnv("DB_AUTO_MIGRATE", "false") == "true",
 		},
 		JWT: JWTConfig{

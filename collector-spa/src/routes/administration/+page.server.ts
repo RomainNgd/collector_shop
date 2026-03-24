@@ -97,7 +97,9 @@ const validateImageFile = (file: File | null) => {
 	return file.type.startsWith('image/') ? null : 'Le fichier choisi doit etre une image';
 };
 
-const extractEntityId = (payload: ProductMutationApiData | CategoryMutationApiData | undefined): number | null => {
+const extractEntityId = (
+	payload: ProductMutationApiData | CategoryMutationApiData | undefined
+): number | null => {
 	if (!payload || typeof payload !== 'object') {
 		return null;
 	}

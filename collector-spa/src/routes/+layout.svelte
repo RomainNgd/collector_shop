@@ -33,35 +33,47 @@
 	});
 </script>
 
-<div class="app-shell min-h-screen text-slate-900">
-	<header class="sticky top-0 z-50 w-full border-b border-white/50 bg-white/70 backdrop-blur-xl">
-		<div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+<div class="app-shell min-h-screen">
+	<header class="site-header">
+		<div
+			class="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-4 sm:px-6 lg:px-8"
+		>
 			<div class="flex items-center gap-8">
-				<a href={resolve('/')} class="text-brand-primary text-2xl font-black tracking-tight">
-					COLLECTOR<span class="text-slate-900">SHOP</span>
+				<a href={resolve('/')} class="brand-link">
+					<span class="brand-mark" aria-hidden="true">C</span>
+					<span class="brand-lockup">
+						<span class="brand-kicker">Collector</span>
+						<span class="brand-name">Shop</span>
+					</span>
 				</a>
-				<nav class="hidden gap-6 text-sm font-semibold md:flex">
+
+				<nav class="hidden items-center gap-3 md:flex">
 					<a href={resolve('/')} class="nav-link">Accueil</a>
-					<a href={resolve('/')} class="nav-link">Catalogue</a>
+					<a href={resolve('/catalogue')} class="nav-link">Catalogue</a>
 					{#if data.user?.role === ADMIN_ROLE}
 						<a href={resolve('/administration')} class="nav-link">Administration</a>
 					{/if}
 				</nav>
 			</div>
 
-			<div class="flex items-center gap-4">
+			<div class="flex items-center gap-3">
 				{#if data.user}
-					<span class="hidden text-xs font-semibold text-slate-600 sm:inline">
+					<span class="theme-pill theme-pill-contrast account-pill hidden sm:inline-flex">
 						Connecte: {data.user.role}
 					</span>
 					<form method="POST" action={resolve('/logout')}>
-						<button type="submit" class="auth-link">Deconnexion</button>
+						<button type="submit" class="header-action header-action-secondary">
+							Deconnexion
+						</button>
 					</form>
 				{:else}
-					<a href={resolve('/login')} class="auth-link">Connexion</a>
+					<a href={resolve('/auth/register')} class="header-action header-action-primary">
+						Inscription
+					</a>
+					<a href={resolve('/login')} class="header-action header-action-secondary">Connexion</a>
 				{/if}
 
-				<a href={resolve('/panier')} class="cart-link">
+				<a href={resolve('/panier')} class="header-action header-cart">
 					<span class="sr-only">Panier</span>
 					Panier
 					<span class="cart-badge" class:pulse={pulseActive}>{$cartCount}</span>
@@ -71,92 +83,196 @@
 	</header>
 
 	<main class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-		{@render children()}
+		<div class="page-reveal">
+			{@render children()}
+		</div>
 	</main>
 
-	<footer class="border-t border-slate-200/80 bg-white/60 py-12 backdrop-blur">
-		<div class="mx-auto max-w-7xl px-4 text-center">
-			<p class="text-sm text-slate-500">&copy; 2026 Collector Shop. Fabrique avec passion.</p>
+	<footer class="site-footer">
+		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+			<div class="footer-card">
+				<div>
+					<p class="theme-kicker">Collector Shop</p>
+					<p class="theme-copy mt-3 max-w-2xl text-sm">
+						Des pieces choisies pour enrichir chaque collection.
+					</p>
+				</div>
+				<p class="theme-copy text-sm">&copy; 2026 Collector Shop. Fabrique avec passion.</p>
+			</div>
 		</div>
 	</footer>
 </div>
 
 <style>
 	.app-shell {
-		background:
-			radial-gradient(circle at 10% -10%, rgba(37, 99, 235, 0.18), transparent 40%),
-			radial-gradient(circle at 90% 5%, rgba(245, 158, 11, 0.14), transparent 35%),
-			linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
+		color: var(--color-ink);
 	}
 
-	.nav-link {
-		transition: color 220ms ease;
+	.site-header {
+		position: sticky;
+		top: 0;
+		z-index: 50;
+		border-bottom: 1px solid rgb(var(--color-primary-rgb) / 0.08);
+		background: rgb(var(--color-white-rgb) / 0.78);
+		backdrop-filter: blur(20px);
+		box-shadow: 0 10px 30px -28px rgb(var(--color-black-rgb) / 0.45);
 	}
 
-	.nav-link:hover {
+	.brand-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.9rem;
+	}
+
+	.brand-mark {
+		display: grid;
+		place-items: center;
+		height: 2.9rem;
+		width: 2.9rem;
+		border-radius: 1rem;
+		background: var(--gradient-primary);
+		color: var(--color-white);
+		font-size: 1.25rem;
+		font-weight: 900;
+		box-shadow: var(--shadow-button);
+	}
+
+	.brand-lockup {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+
+	.brand-kicker {
+		font-size: 0.72rem;
+		font-weight: 800;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
 		color: var(--color-primary);
 	}
 
-	.cart-link {
+	.brand-name {
+		font-size: 1.25rem;
+		font-weight: 900;
+		letter-spacing: -0.05em;
+		color: var(--color-black);
+	}
+
+	.nav-link {
+		border-radius: 999px;
+		padding: 0.55rem 0.9rem;
+		font-size: 0.88rem;
+		font-weight: 700;
+		color: var(--color-primary);
+		transition:
+			background-color var(--transition-standard),
+			color var(--transition-standard);
+	}
+
+	.nav-link:hover {
+		background: rgb(var(--color-secondary-rgb) / 0.12);
+		color: var(--color-black);
+	}
+
+	.header-action {
 		position: relative;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
 		border-radius: 999px;
-		padding: 0.45rem 0.9rem;
+		padding: 0.65rem 1rem;
 		font-size: 0.84rem;
-		font-weight: 700;
-		color: #0f172a;
-		background: white;
-		border: 1px solid rgba(30, 41, 59, 0.12);
-		transition: transform 180ms ease;
+		font-weight: 800;
+		transition:
+			transform 160ms ease,
+			border-color var(--transition-standard),
+			background-color var(--transition-standard),
+			filter var(--transition-standard);
 	}
 
-	.auth-link {
-		border-radius: 999px;
-		padding: 0.45rem 0.9rem;
-		font-size: 0.84rem;
-		font-weight: 700;
-		color: #0f172a;
-		background: white;
-		border: 1px solid rgba(30, 41, 59, 0.12);
-		transition: transform 180ms ease;
+	.header-action-secondary {
+		border: 1px solid var(--color-border);
+		background: rgb(var(--color-white-rgb) / 0.9);
+		color: var(--color-primary);
+		box-shadow: inset 0 1px 0 rgb(var(--color-white-rgb) / 0.6);
 	}
 
-	.auth-link:hover {
+	.header-action-secondary:hover {
 		transform: translateY(-1px);
+		border-color: var(--color-border-strong);
+		background: rgb(var(--color-secondary-rgb) / 0.1);
 	}
 
-	.cart-link:hover {
+	.header-action-primary {
+		background: var(--gradient-primary);
+		color: var(--color-white);
+		box-shadow: var(--shadow-button);
+	}
+
+	.header-action-primary:hover {
 		transform: translateY(-1px);
+		filter: saturate(1.03) brightness(1.02);
+	}
+
+	.header-cart {
+		padding-right: 1.7rem;
+		background: var(--gradient-primary);
+		color: var(--color-white);
+		box-shadow: var(--shadow-button);
+	}
+
+	.header-cart:hover {
+		transform: translateY(-1px);
+		filter: saturate(1.03) brightness(1.02);
+	}
+
+	.account-pill {
+		background: rgb(var(--color-secondary-rgb) / 0.18);
+		border-color: rgb(var(--color-primary-rgb) / 0.18);
 	}
 
 	.cart-badge {
 		position: absolute;
-		top: -0.25rem;
-		right: -0.2rem;
+		top: -0.35rem;
+		right: -0.25rem;
 		display: flex;
-		height: 1.1rem;
-		width: 1.1rem;
+		height: 1.35rem;
+		width: 1.35rem;
 		align-items: center;
 		justify-content: center;
 		border-radius: 999px;
-		background: var(--color-primary);
-		color: white;
-		font-size: 0.62rem;
-		font-weight: 800;
+		background: var(--color-secondary);
+		color: var(--color-primary);
+		font-size: 0.68rem;
+		font-weight: 900;
+		box-shadow: 0 0 0 4px rgb(var(--color-white-rgb) / 0.86);
 	}
 
 	.cart-badge.pulse {
-		animation: cart-badge-pulse 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+		animation: pulse-soft 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
 	}
 
-	@keyframes cart-badge-pulse {
-		0% {
-			transform: scale(1);
-		}
-		45% {
-			transform: scale(1.48);
-		}
-		100% {
-			transform: scale(1);
+	.site-footer {
+		padding: 0 0 3rem;
+	}
+
+	.footer-card {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-panel);
+		padding: 1.5rem 1.75rem;
+		background: rgb(var(--color-white-rgb) / 0.84);
+		box-shadow: var(--shadow-soft);
+		backdrop-filter: blur(18px);
+	}
+
+	@media (max-width: 768px) {
+		.footer-card {
+			flex-direction: column;
+			align-items: flex-start;
 		}
 	}
 </style>

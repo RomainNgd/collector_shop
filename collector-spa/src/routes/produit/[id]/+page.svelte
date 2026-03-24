@@ -28,33 +28,45 @@
 	});
 </script>
 
-<section class="product-page rounded-3xl border border-white/70 p-6 md:p-10">
-	<div class="grid grid-cols-1 gap-10 lg:grid-cols-[1.1fr_1fr]">
+<section class="product-page theme-panel p-6 md:p-10">
+	<div class="grid grid-cols-1 gap-10 lg:grid-cols-[1.05fr_1fr]">
 		<div class="image-shell">
-			<div class="image-glow"></div>
+			<span class="theme-pill image-pill">{data.product.category}</span>
 			<img src={data.product.imageUrl} alt={data.product.name} class="product-image" />
 		</div>
 
 		<div class="content-shell">
-			<span class="chip">{data.product.category}</span>
-			<h1 class="mt-4 text-4xl leading-tight font-black text-slate-900 md:text-5xl">
+			<p class="theme-kicker">Edition detaillee</p>
+			<h1 class="theme-title mt-4 text-4xl leading-tight font-black md:text-5xl">
 				{data.product.name}
 			</h1>
-			<p class="mt-4 max-w-xl text-base text-slate-600 md:text-lg">{data.product.description}</p>
-			<p class="text-brand-primary mt-6 text-4xl font-black">{data.product.price} EUR</p>
+			<p class="theme-copy mt-5 max-w-xl text-base md:text-lg">{data.product.description}</p>
+
+			<div class="meta-list mt-8">
+				<div class="meta-item">
+					<span class="detail-label">Categorie</span>
+					<span class="detail-value">{data.product.category}</span>
+				</div>
+				<div class="meta-item">
+					<span class="detail-label">Reference</span>
+					<span class="detail-value">#{data.product.id}</span>
+				</div>
+			</div>
+
+			<p class="theme-price mt-8 text-4xl font-black">{data.product.price} EUR</p>
 
 			<div class="mt-8 flex flex-wrap gap-3">
 				<button
 					type="button"
 					onclick={handleAdd}
-					class="buy-btn rounded-2xl px-7 py-3 font-bold text-white"
+					class="theme-button theme-button-primary buy-btn"
 					class:added
 				>
 					{added ? 'Ajoute au panier' : 'Ajouter au panier'}
 				</button>
-				<a href={resolve('/')} class="secondary-btn rounded-2xl px-7 py-3 font-semibold"
-					>Retour catalogue</a
-				>
+				<a href={resolve('/catalogue')} class="theme-button theme-button-secondary">
+					Retour catalogue
+				</a>
 			</div>
 		</div>
 	</div>
@@ -62,118 +74,78 @@
 
 <style>
 	.product-page {
-		background:
-			radial-gradient(circle at 90% 10%, rgba(37, 99, 235, 0.12), transparent 30%),
-			radial-gradient(circle at 10% 95%, rgba(245, 158, 11, 0.15), transparent 34%),
-			linear-gradient(130deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.92));
-		box-shadow: 0 25px 42px -36px rgba(15, 23, 42, 0.55);
-		animation: detail-in 420ms ease forwards;
+		box-shadow: var(--shadow-strong);
 	}
 
 	.image-shell {
 		position: relative;
 		display: grid;
 		place-items: center;
-		border-radius: 1.5rem;
-		background: linear-gradient(155deg, #ffffff, #eff6ff);
-		padding: 1.4rem;
 		overflow: hidden;
+		border-radius: 1.5rem;
+		border: 1px solid var(--color-border);
+		background: linear-gradient(
+			155deg,
+			rgb(var(--color-white-rgb) / 0.98),
+			rgb(var(--color-primary-rgb) / 0.04)
+		);
+		padding: 1.5rem;
+		min-height: 24rem;
 	}
 
-	.image-glow {
+	.image-pill {
 		position: absolute;
-		inset: -25% auto auto -15%;
-		width: 18rem;
-		height: 18rem;
-		background: radial-gradient(circle, rgba(37, 99, 235, 0.2), transparent 70%);
-		filter: blur(12px);
+		top: 1.25rem;
+		left: 1.25rem;
+		z-index: 2;
 	}
 
 	.product-image {
 		position: relative;
 		z-index: 1;
-		max-height: 510px;
+		max-height: 32rem;
 		width: auto;
 		object-fit: contain;
-		animation: image-pop 500ms cubic-bezier(0.2, 0.9, 0.24, 1);
+		animation: image-pop 520ms cubic-bezier(0.2, 0.9, 0.24, 1);
 	}
 
-	.chip {
-		display: inline-flex;
-		align-items: center;
-		border-radius: 9999px;
-		padding: 0.35rem 0.85rem;
-		font-size: 0.72rem;
+	.meta-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1rem 1.5rem;
+	}
+
+	.meta-item {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+	}
+
+	.detail-label {
+		font-size: 0.78rem;
 		font-weight: 800;
+		letter-spacing: 0.14em;
 		text-transform: uppercase;
-		letter-spacing: 0.15em;
-		background: rgba(245, 158, 11, 0.2);
-		color: #92400e;
+		color: var(--color-ink-muted);
 	}
 
-	.buy-btn {
-		background: linear-gradient(120deg, var(--color-primary), #1d4ed8);
-		transition:
-			transform 160ms ease,
-			box-shadow 220ms ease,
-			filter 220ms ease;
-		box-shadow: 0 18px 28px -20px rgba(37, 99, 235, 1);
-	}
-
-	.buy-btn:hover {
-		filter: brightness(1.03);
-	}
-
-	.buy-btn:active {
-		transform: translateY(1px) scale(0.99);
+	.detail-value {
+		font-size: 1.1rem;
+		font-weight: 800;
+		color: var(--color-black);
 	}
 
 	.buy-btn.added {
-		animation: added-pop 620ms cubic-bezier(0.25, 0.9, 0.3, 1);
-		background: linear-gradient(120deg, #0891b2, #2563eb);
-	}
-
-	.secondary-btn {
-		border: 1px solid rgba(30, 41, 59, 0.14);
-		background: rgba(255, 255, 255, 0.72);
-		color: #0f172a;
-		transition: background-color 200ms ease;
-	}
-
-	.secondary-btn:hover {
-		background: white;
-	}
-
-	@keyframes detail-in {
-		from {
-			opacity: 0;
-			transform: translateY(14px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
+		animation: pulse-soft 620ms cubic-bezier(0.25, 0.9, 0.3, 1);
 	}
 
 	@keyframes image-pop {
 		from {
 			opacity: 0;
-			transform: scale(0.97) rotate(-0.8deg);
+			transform: scale(0.98);
 		}
 		to {
 			opacity: 1;
-			transform: scale(1) rotate(0);
-		}
-	}
-
-	@keyframes added-pop {
-		0% {
-			transform: scale(1);
-		}
-		45% {
-			transform: scale(1.08);
-		}
-		100% {
 			transform: scale(1);
 		}
 	}

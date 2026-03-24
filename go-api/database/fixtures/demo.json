@@ -1,0 +1,81 @@
+{
+  "categories": [
+    {
+      "name": "Demo - Cartes gradees",
+      "description": "Cartes a collectionner notees et protegees pour les collectionneurs exigeants."
+    },
+    {
+      "name": "Demo - Booster boxes",
+      "description": "Displays et coffrets scelles pour ouvrir, garder en vitrine ou investir."
+    },
+    {
+      "name": "Demo - Accessoires",
+      "description": "Protections, rangements et solutions premium pour conserver la collection."
+    },
+    {
+      "name": "Demo - Retro gaming",
+      "description": "Pieces retro et editions collector pour completer un setup nostalgique."
+    }
+  ],
+  "users": [
+    {
+      "email": "admin@collector.local",
+      "password": "Admin123!",
+      "role": "ROLE_ADMIN"
+    },
+    {
+      "email": "user@collector.local",
+      "password": "User123!",
+      "role": "ROLE_USER"
+    },
+    {
+      "email": "collector@collector.local",
+      "password": "Collector123!",
+      "role": "ROLE_USER"
+    }
+  ],
+  "products": [
+    {
+      "name": "Demo - Dracaufeu EX PSA 10",
+      "description": "Carte Dracaufeu EX en slab PSA 10, parfaite pour lancer une vitrine premium.",
+      "image": "seed-charizard-psa.svg",
+      "price": 649.9,
+      "category": "Demo - Cartes gradees"
+    },
+    {
+      "name": "Demo - Display Pokemon 151 JP",
+      "description": "Display scellee Pokemon 151 en version japonaise, tres recherchee par les collectionneurs.",
+      "image": "seed-pokemon-151-box.svg",
+      "price": 189.9,
+      "category": "Demo - Booster boxes"
+    },
+    {
+      "name": "Demo - Display One Piece Wings of the Captain",
+      "description": "Booster box One Piece pour enrichir une collection TCG moderne et populaire.",
+      "image": "seed-one-piece-box.svg",
+      "price": 119.9,
+      "category": "Demo - Booster boxes"
+    },
+    {
+      "name": "Demo - Classeur Top Loader 9 cases",
+      "description": "Classeur rigide concu pour les top loaders, ideal pour les cartes a forte valeur.",
+      "image": "seed-toploader-binder.svg",
+      "price": 39.9,
+      "category": "Demo - Accessoires"
+    },
+    {
+      "name": "Demo - Coffret acrylic premium",
+      "description": "Protection acrylique premium pour exposer un display ou une elite trainer box.",
+      "image": "seed-acrylic-case.svg",
+      "price": 24.9,
+      "category": "Demo - Accessoires"
+    },
+    {
+      "name": "Demo - Game Boy Color Pikachu Edition",
+      "description": "Console retro iconique en edition Pikachu, parfaite pour une selection collector lifestyle.",
+      "image": "seed-gameboy-pikachu.svg",
+      "price": 219.9,
+      "category": "Demo - Retro gaming"
+    }
+  ]
+}

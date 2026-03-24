@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"poc-gin/config"
 	"poc-gin/pkg/logger"
+	"strings"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -23,7 +24,7 @@ func New(cfg *config.DatabaseConfig) (*Database, error) {
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+		return nil, formatConnectionError(cfg, err)
 	}
 
 	sqlDB, err := db.DB()
@@ -46,6 +47,36 @@ func New(cfg *config.DatabaseConfig) (*Database, error) {
 
 	logger.Info("Database connected successfully")
 	return &Database{db}, nil
+}
+
+func formatConnectionError(cfg *config.DatabaseConfig, err error) error {
+	if hint := connectionHint(cfg, err); hint != "" {
+		return fmt.Errorf("failed to connect to database: %w; hint: %s", err, hint)
+	}
+
+	return fmt.Errorf("failed to connect to database: %w", err)
+}
+
+func connectionHint(cfg *config.DatabaseConfig, err error) string {
+	message := strings.ToLower(err.Error())
+
+	switch {
+	case strings.Contains(message, "sqlstate 28p01"),
+		strings.Contains(message, "password authentication failed"):
+		return "check DB_USER and DB_PASSWORD. If you are using the local docker-compose and the Postgres volume was already initialized with older credentials, recreate it from go-api with `docker compose down -v` then `docker compose up -d db` (this deletes local database data)"
+	case strings.Contains(message, "role") &&
+		strings.Contains(message, "does not exist"):
+		return "check DB_USER and DB_NAME. If you changed them after the local Postgres volume was first created, recreate the volume from go-api with `docker compose down -v` then `docker compose up -d db`"
+	case strings.Contains(message, "connection refused"),
+		strings.Contains(message, "no connection could be made"),
+		strings.Contains(message, "actively refused it"):
+		return fmt.Sprintf("make sure Postgres is running on %s:%s. For local development, start it from go-api with `docker compose up -d db`", cfg.Host, cfg.Port)
+	case strings.Contains(message, "database") &&
+		strings.Contains(message, "does not exist"):
+		return "check DB_NAME. If you changed it after the local Postgres volume was first created, recreate the volume from go-api with `docker compose down -v` then `docker compose up -d db`"
+	default:
+		return ""
+	}
 }
 
 func (db *Database) Close() error {

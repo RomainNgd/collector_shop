@@ -8,4 +8,5 @@ resources:
   - postgres.yaml
   - go-api.yaml
   - collector-spa.yaml
+  - collector-spa-hpa.yaml
   - ingress.yaml

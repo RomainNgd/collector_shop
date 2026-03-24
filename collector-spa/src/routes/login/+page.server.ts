@@ -1,4 +1,9 @@
-import { buildApiHeaders, API_BASE_URL, getApiErrorMessage, readApiResponse } from '$lib/server/api';
+import {
+	buildApiHeaders,
+	API_BASE_URL,
+	getApiErrorMessage,
+	readApiResponse
+} from '$lib/server/api';
 import { claimsToUser, decodeJwtPayload } from '$lib/server/jwt';
 import { ADMIN_ROLE } from '$lib/types';
 import { fail, redirect } from '@sveltejs/kit';
@@ -14,10 +19,20 @@ type LoginApiResponse = {
 	};
 };
 
-export const load: PageServerLoad = ({ locals }) => {
+export const load: PageServerLoad = ({ locals, cookies }) => {
 	if (locals.user) {
 		redirect(303, '/');
 	}
+
+	const registeredEmail = String(cookies.get('register_success_email') ?? '').trim();
+	if (registeredEmail) {
+		cookies.delete('register_success_email', { path: '/' });
+	}
+
+	return {
+		registered: registeredEmail.length > 0,
+		registeredEmail
+	};
 };
 
 export const actions: Actions = {
@@ -44,7 +59,9 @@ export const actions: Actions = {
 
 		if (!response.ok || result.payload?.success !== true || !token) {
 			return fail(401, {
-				error: getApiErrorMessage(response, result, 'Identifiants invalides') ?? 'Identifiants invalides',
+				error:
+					getApiErrorMessage(response, result, 'Identifiants invalides') ??
+					'Identifiants invalides',
 				email
 			});
 		}

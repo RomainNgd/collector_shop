@@ -5,10 +5,13 @@ export default {
 		extend: {
 			colors: {
 				brand: {
-					// On utilise la syntaxe var() pour lier au CSS
 					primary: 'var(--color-primary)',
 					secondary: 'var(--color-secondary)',
-					accent: 'var(--color-accent)'
+					ink: 'var(--color-ink)',
+					muted: 'var(--color-ink-muted)',
+					surface: 'var(--surface-card)',
+					base: 'var(--surface-base)',
+					line: 'var(--color-border)'
 				}
 			}
 		}
