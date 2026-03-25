@@ -23,10 +23,12 @@ spec:
       labels:
         app: go-api
     spec:
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
       containers:
         - name: go-api
-          image: collector-shop/go-api:local
-          imagePullPolicy: IfNotPresent
+          image: romain2311/go-api:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http

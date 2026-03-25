@@ -9,4 +9,4 @@ data:
   API_PORT: "8080"
   SPA_PORT: "3000"
   API_BASE_URL: "http://go-api:8080"
-  API_PUBLIC_BASE_URL: "http://collector.local"
+  API_PUBLIC_BASE_URL: "http://collector-api.romainnigond.fr"

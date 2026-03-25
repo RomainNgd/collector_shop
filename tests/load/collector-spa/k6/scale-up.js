@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
-const baseUrl = __ENV.BASE_URL || 'http://collector.local';
+const baseUrl = __ENV.BASE_URL || 'http://collector-app.romainnigond.fr';
 const pathToHit = __ENV.PATH_TO_HIT || '/';
 const hostHeader = __ENV.HOST_HEADER;
 const batchSize = Number(__ENV.BATCH_SIZE || 4);
