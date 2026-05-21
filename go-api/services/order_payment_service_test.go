@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"poc-gin/models"
 	"poc-gin/pkg/constants"
@@ -261,6 +262,177 @@ func TestOrderPaymentServiceWebhookMarksOrderAsPaid(t *testing.T) {
 		t.Fatal("expected paid_at to be set")
 	}
 	if updatedOrder.StripePaymentIntentID != "pi_test_123" {
+		t.Fatalf("expected payment intent id to be stored, got %s", updatedOrder.StripePaymentIntentID)
+	}
+}
+
+func TestOrderPaymentServiceWebhookRejectsInvalidStripeSignature(t *testing.T) {
+	tx := openIntegrationTx(t)
+	orderService := NewOrderService(tx)
+
+	stripeService := &fakeStripeService{
+		webhookFn: func(payload []byte, signature string) (*StripeWebhookEvent, error) {
+			return nil, ErrStripeInvalidWebhook
+		},
+	}
+
+	service := NewOrderPaymentService(tx, stripeService, orderService)
+	err := service.HandleStripeWebhook(context.Background(), []byte(`{"id":"evt_invalid"}`), "bad-signature")
+	if !errors.Is(err, ErrStripeInvalidWebhook) {
+		t.Fatalf("expected ErrStripeInvalidWebhook, got %v", err)
+	}
+}
+
+func TestOrderPaymentServiceWebhookMarksOrderAsExpired(t *testing.T) {
+	tx := openIntegrationTx(t)
+	orderService := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID)
+
+	order, err := orderService.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 1},
+	})
+	if err != nil {
+		t.Fatalf("expected order creation success, got %v", err)
+	}
+
+	stripeService := &fakeStripeService{
+		webhookFn: func(payload []byte, signature string) (*StripeWebhookEvent, error) {
+			return &StripeWebhookEvent{
+				Type: stripeEventCheckoutExpired,
+				CheckoutSession: StripeCheckoutSession{
+					ID:            "cs_test_expired",
+					Status:        "expired",
+					PaymentStatus: "unpaid",
+					Metadata: map[string]string{
+						"order_id": strconv.FormatUint(uint64(order.ID), 10),
+					},
+				},
+			}, nil
+		},
+	}
+
+	service := NewOrderPaymentService(tx, stripeService, orderService)
+	if err := service.HandleStripeWebhook(context.Background(), []byte(`{}`), "t=1,v1=test"); err != nil {
+		t.Fatalf("expected expired webhook processing success, got %v", err)
+	}
+
+	updatedOrder, err := orderService.GetOrderByID(context.Background(), user.ID, order.ID, constants.RoleUser)
+	if err != nil {
+		t.Fatalf("expected updated order fetch success, got %v", err)
+	}
+	if updatedOrder.Status != models.OrderStatusAwaitingPayment {
+		t.Fatalf("expected order to stay awaiting payment, got %s", updatedOrder.Status)
+	}
+	if updatedOrder.PaymentStatus != models.OrderPaymentStatusExpired {
+		t.Fatalf("expected expired payment status, got %s", updatedOrder.PaymentStatus)
+	}
+	if updatedOrder.PaidAt != nil {
+		t.Fatal("expected paid_at to stay empty")
+	}
+}
+
+func TestOrderPaymentServiceWebhookMarksAsyncPaymentFailed(t *testing.T) {
+	tx := openIntegrationTx(t)
+	orderService := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID)
+
+	order, err := orderService.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 1},
+	})
+	if err != nil {
+		t.Fatalf("expected order creation success, got %v", err)
+	}
+
+	stripeService := &fakeStripeService{
+		webhookFn: func(payload []byte, signature string) (*StripeWebhookEvent, error) {
+			return &StripeWebhookEvent{
+				Type: stripeEventCheckoutAsyncPaymentFailed,
+				CheckoutSession: StripeCheckoutSession{
+					ID:            "cs_test_async_failed",
+					Status:        "complete",
+					PaymentStatus: "unpaid",
+					Metadata: map[string]string{
+						"order_id": strconv.FormatUint(uint64(order.ID), 10),
+					},
+				},
+			}, nil
+		},
+	}
+
+	service := NewOrderPaymentService(tx, stripeService, orderService)
+	if err := service.HandleStripeWebhook(context.Background(), []byte(`{}`), "t=1,v1=test"); err != nil {
+		t.Fatalf("expected async failed webhook processing success, got %v", err)
+	}
+
+	updatedOrder, err := orderService.GetOrderByID(context.Background(), user.ID, order.ID, constants.RoleUser)
+	if err != nil {
+		t.Fatalf("expected updated order fetch success, got %v", err)
+	}
+	if updatedOrder.Status != models.OrderStatusAwaitingPayment {
+		t.Fatalf("expected order to stay awaiting payment, got %s", updatedOrder.Status)
+	}
+	if updatedOrder.PaymentStatus != models.OrderPaymentStatusFailed {
+		t.Fatalf("expected failed payment status, got %s", updatedOrder.PaymentStatus)
+	}
+	if updatedOrder.PaidAt != nil {
+		t.Fatal("expected paid_at to stay empty")
+	}
+}
+
+func TestOrderPaymentServiceWebhookMarksAsyncPaymentSucceeded(t *testing.T) {
+	tx := openIntegrationTx(t)
+	orderService := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID)
+
+	order, err := orderService.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 1},
+	})
+	if err != nil {
+		t.Fatalf("expected order creation success, got %v", err)
+	}
+
+	stripeService := &fakeStripeService{
+		webhookFn: func(payload []byte, signature string) (*StripeWebhookEvent, error) {
+			return &StripeWebhookEvent{
+				Type: stripeEventCheckoutAsyncPaymentSuccess,
+				CheckoutSession: StripeCheckoutSession{
+					ID:              "cs_test_async_success",
+					Status:          "complete",
+					PaymentStatus:   "paid",
+					PaymentIntentID: "pi_test_async_success",
+					Metadata: map[string]string{
+						"order_id": strconv.FormatUint(uint64(order.ID), 10),
+					},
+				},
+			}, nil
+		},
+	}
+
+	service := NewOrderPaymentService(tx, stripeService, orderService)
+	if err := service.HandleStripeWebhook(context.Background(), []byte(`{}`), "t=1,v1=test"); err != nil {
+		t.Fatalf("expected async success webhook processing success, got %v", err)
+	}
+
+	updatedOrder, err := orderService.GetOrderByID(context.Background(), user.ID, order.ID, constants.RoleUser)
+	if err != nil {
+		t.Fatalf("expected updated order fetch success, got %v", err)
+	}
+	if updatedOrder.Status != models.OrderStatusPreparation {
+		t.Fatalf("expected preparation status, got %s", updatedOrder.Status)
+	}
+	if updatedOrder.PaymentStatus != models.OrderPaymentStatusPaid {
+		t.Fatalf("expected paid payment status, got %s", updatedOrder.PaymentStatus)
+	}
+	if updatedOrder.PaidAt == nil {
+		t.Fatal("expected paid_at to be set")
+	}
+	if updatedOrder.StripePaymentIntentID != "pi_test_async_success" {
 		t.Fatalf("expected payment intent id to be stored, got %s", updatedOrder.StripePaymentIntentID)
 	}
 }

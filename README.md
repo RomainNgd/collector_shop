@@ -14,7 +14,7 @@ Le projet est organise en monorepo:
 ## Prerequis
 
 - Docker
-- Go
+- Go 1.26.3
 - Node.js 22
 - npm
 - PowerShell pour les scripts Windows fournis
