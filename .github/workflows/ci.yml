@@ -8,231 +8,48 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  GO_VERSION: "1.25.5"
-  NODE_VERSION: "22"
-  IMAGE_NAMESPACE: collector-shop
-  IMAGE_REGISTRY: docker.io
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
   go-tests:
     name: Go Tests
-    runs-on: ubuntu-latest
+    uses: ./.github/workflows/reusable-go-tests.yml
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go-api/go.mod
-          cache-dependency-path: go-api/go.sum
-
-      - name: Run Go tests
-        run: bash go-api/scripts/ci-test.sh
-
-      - name: Upload Go coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: go-coverage
-          path: go-api/coverage.out
-
-  svelte-tests:
+  svelte-checks:
     name: Svelte Checks
-    runs-on: ubuntu-latest
+    uses: ./.github/workflows/reusable-svelte-checks.yml
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: collector-spa/package-lock.json
-
-      - name: Run frontend checks
-        run: bash collector-spa/scripts/ci-test.sh
+  lint:
+    name: Lint
+    uses: ./.github/workflows/reusable-lint.yml
 
   sonarcloud:
     name: SonarCloud
-    runs-on: ubuntu-latest
     needs:
       - go-tests
-      - svelte-tests
-    env:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
-
-    steps:
-      - name: Checkout repository
-        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_ORGANIZATION != '' }}
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download Go coverage
-        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_ORGANIZATION != '' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: go-coverage
-          path: go-api
-
-      - name: Skip SonarCloud when not configured
-        if: ${{ env.SONAR_TOKEN == '' || env.SONAR_ORGANIZATION == '' }}
-        run: echo "Skipping SonarCloud scan because SONAR_TOKEN or SONAR_ORGANIZATION is not configured."
-
-      - name: SonarCloud scan
-        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_ORGANIZATION != '' }}
-        uses: SonarSource/sonarqube-scan-action@v4
-        env:
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
-            -Dsonar.host.url=https://sonarcloud.io
+      - svelte-checks
+    uses: ./.github/workflows/reusable-sonarcloud.yml
+    with:
+      sonar_organization: ${{ vars.SONAR_ORGANIZATION }}
+    secrets:
+      sonar_token: ${{ secrets.SONAR_TOKEN }}
 
   build-and-scan:
     name: Build And Security Scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
     needs:
       - go-tests
-      - svelte-tests
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Derive image tag
-        shell: bash
-        run: |
-          echo "IMAGE_TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
-          echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
-
-      - name: Build Docker images
-        env:
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-          IMAGE_NAMESPACE: ${{ env.IMAGE_NAMESPACE }}
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-        run: bash build/scripts/ci-build-images.sh
-
-      - name: Set up Trivy
-        # setup-trivy v0.2.6
-        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
-        with:
-          cache: true
-          version: v0.69.3
-
-      - name: Scan repository
-        id: scan_repository
-        # trivy-action v0.35.0
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
-        with:
-          scan-type: "fs"
-          scan-ref: "."
-          scanners: "vuln,secret,misconfig"
-          format: "sarif"
-          output: "trivy-repo-results.sarif"
-          severity: "HIGH,CRITICAL"
-          ignore-unfixed: true
-          hide-progress: true
-          exit-code: "0"
-          skip-setup-trivy: true
-
-      - name: Upload Trivy repository scan results
-        if: ${{ always() && hashFiles('trivy-repo-results.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-repo-results.sarif
-
-      - name: Scan go-api image
-        id: scan_go_api_image
-        # trivy-action v0.35.0
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
-        with:
-          scan-type: "image"
-          image-ref: "docker.io/${{ env.IMAGE_NAMESPACE }}/go-api:${{ env.IMAGE_TAG }}"
-          format: "table"
-          severity: "HIGH,CRITICAL"
-          ignore-unfixed: true
-          vuln-type: "os,library"
-          hide-progress: true
-          exit-code: "0"
-          skip-setup-trivy: true
-
-      - name: Scan collector-spa image
-        id: scan_collector_spa_image
-        # trivy-action v0.35.0
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
-        with:
-          scan-type: "image"
-          image-ref: "docker.io/${{ env.IMAGE_NAMESPACE }}/collector-spa:${{ env.IMAGE_TAG }}"
-          format: "table"
-          severity: "HIGH,CRITICAL"
-          ignore-unfixed: true
-          vuln-type: "os,library"
-          hide-progress: true
-          exit-code: "0"
-          skip-setup-trivy: true
+      - svelte-checks
+      - lint
+    uses: ./.github/workflows/reusable-build-and-scan.yml
 
   push-images:
     name: Push Docker Images
-    runs-on: ubuntu-latest
     needs:
       - build-and-scan
     if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
-    env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    steps:
-      - name: Checkout repository
-        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: actions/checkout@v4
-
-      - name: Skip Docker push when not configured
-        if: ${{ env.DOCKERHUB_USERNAME == '' || env.DOCKERHUB_TOKEN == '' }}
-        run: echo "Skipping Docker Hub push because DOCKERHUB_USERNAME or DOCKERHUB_TOKEN is not configured."
-
-      - name: Log in to Docker Hub
-        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ env.DOCKERHUB_USERNAME }}
-          password: ${{ env.DOCKERHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: docker/setup-buildx-action@v3
-
-      - name: Publish go-api image
-        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: build/docker/go-api.Dockerfile
-          push: true
-          tags: |
-            docker.io/${{ env.DOCKERHUB_USERNAME }}/go-api:${{ github.sha }}
-            docker.io/${{ env.DOCKERHUB_USERNAME }}/go-api:latest
-
-      - name: Publish collector-spa image
-        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: build/docker/collector-spa.Dockerfile
-          push: true
-          tags: |
-            docker.io/${{ env.DOCKERHUB_USERNAME }}/collector-spa:${{ github.sha }}
-            docker.io/${{ env.DOCKERHUB_USERNAME }}/collector-spa:latest
+    uses: ./.github/workflows/reusable-push-images.yml
+    secrets:
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}

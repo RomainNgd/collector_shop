@@ -1,0 +1,56 @@
+name: Reusable Lint
+
+on:
+  workflow_call:
+
+jobs:
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go-api/go.mod
+          cache-dependency-path: go-api/go.sum
+
+      - name: Check Go formatting
+        working-directory: go-api
+        shell: bash
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Run go vet
+        working-directory: go-api
+        run: go vet ./...
+
+  svelte-lint:
+    name: Svelte Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: collector-spa/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: collector-spa
+        run: npm ci
+
+      - name: Run frontend lint
+        working-directory: collector-spa
+        run: npm run lint

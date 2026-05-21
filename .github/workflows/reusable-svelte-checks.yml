@@ -1,0 +1,23 @@
+name: Reusable Svelte Checks
+
+on:
+  workflow_call:
+
+jobs:
+  svelte-checks:
+    name: Svelte Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: collector-spa/package-lock.json
+
+      - name: Run frontend checks
+        run: bash collector-spa/scripts/ci-test.sh

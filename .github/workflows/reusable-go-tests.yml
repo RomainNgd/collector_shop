@@ -1,0 +1,30 @@
+name: Reusable Go Tests
+
+on:
+  workflow_call:
+
+jobs:
+  go-tests:
+    name: Go Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go-api/go.mod
+          cache-dependency-path: go-api/go.sum
+
+      - name: Run Go tests
+        run: bash go-api/scripts/ci-test.sh
+
+      - name: Upload Go coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: go-api/coverage.out
