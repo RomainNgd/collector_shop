@@ -2,7 +2,8 @@
 
 Ce dossier contient une base Kubernetes pour lancer `postgres`, `go-api` et `collector-spa` sur k3s.
 
-Pour l'installation complete du VPS, de k3s, d'Argo CD et de cert-manager, voir [../README.md](../README.md).
+Pour l'installation complete du VPS, de k3s et d'Argo CD, voir [../README.md](../README.md).
+cert-manager et le `ClusterIssuer` sont consideres comme une configuration globale deja presente sur le cluster.
 
 ## 1) Prerequis
 
@@ -27,6 +28,7 @@ kubectl create secret docker-registry dockerhub-pull-secret `
 - Si Stripe est active, renseigne aussi `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` et garde `STRIPE_CHECKOUT_ALLOWED_ORIGINS` aligne avec l'origine publique HTTPS du front.
 - `metrics-server` doit etre installe si tu veux que le `HorizontalPodAutoscaler` fonctionne.
 - Verifie que `kubectl top pods -n collector-shop-prod` repond avant de lancer un test de charge.
+- cert-manager doit etre installe et le `ClusterIssuer` `letsencrypt-prod` doit exister avant la synchronisation Argo CD.
 
 ## 2) Configurer le DNS
 

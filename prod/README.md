@@ -57,18 +57,23 @@ sudo chown "$USER:$USER" ~/.kube/config
 chmod 600 ~/.kube/config
 ```
 
-## 3. Installer cert-manager
+## 3. Verifier cert-manager
 
-cert-manager fournit les certificats Let's Encrypt utilises par l'Ingress.
+cert-manager est gere au niveau global du cluster. Il doit deja etre installe avant le deploiement de l'application.
 
 ```sh
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
 kubectl -n cert-manager rollout status deployment/cert-manager
 kubectl -n cert-manager rollout status deployment/cert-manager-webhook
 kubectl -n cert-manager rollout status deployment/cert-manager-cainjector
 ```
 
-Le `ClusterIssuer` est versionne dans `prod/k3s/clusterissuer.yaml`.
+Le `ClusterIssuer` global attendu par l'Ingress est:
+
+```sh
+kubectl get clusterissuer letsencrypt-prod
+```
+
+Si ton issuer global porte un autre nom, modifie l'annotation `cert-manager.io/cluster-issuer` dans `prod/k3s/ingress.yaml`.
 
 ## 4. Installer Argo CD
 
@@ -154,4 +159,5 @@ Les URLs attendues sont:
 - `API_BASE_URL` reste interne au cluster: `http://go-api:8080`.
 - `API_PUBLIC_BASE_URL` est en HTTPS pour le navigateur.
 - `GIN_MODE=release` est active en production.
+- cert-manager et le `ClusterIssuer` sont geres globalement sur le cluster, pas par les manifests applicatifs.
 - Les vrais secrets ne sont pas necessaires dans Git pour cet exercice; cree-les dans le cluster.
