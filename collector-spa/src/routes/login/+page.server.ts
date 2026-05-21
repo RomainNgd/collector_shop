@@ -1,6 +1,6 @@
 import {
 	buildApiHeaders,
-	API_BASE_URL,
+	buildInternalApiPath,
 	getApiErrorMessage,
 	readApiResponse
 } from '$lib/server/api';
@@ -48,7 +48,7 @@ export const actions: Actions = {
 			});
 		}
 
-		const response = await fetch(`${API_BASE_URL}/auth/login`, {
+		const response = await fetch(buildInternalApiPath('/auth/login'), {
 			method: 'POST',
 			headers: buildApiHeaders({ contentType: 'application/json' }),
 			body: JSON.stringify({ email, password })

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"poc-gin/models"
@@ -32,11 +33,11 @@ func TestCategoryServiceCRUD(t *testing.T) {
 		Description: "Trading cards",
 	}
 
-	if err := service.CreateCategory(category); err != nil {
+	if err := service.CreateCategory(context.Background(), category); err != nil {
 		t.Fatalf("expected create success, got %v", err)
 	}
 
-	found, err := service.GetCategoryByID(category.ID)
+	found, err := service.GetCategoryByID(context.Background(), category.ID)
 	if err != nil {
 		t.Fatalf("expected category fetch success, got %v", err)
 	}
@@ -44,7 +45,7 @@ func TestCategoryServiceCRUD(t *testing.T) {
 		t.Fatalf("expected category name %s, got %s", category.Name, found.Name)
 	}
 
-	all, err := service.GetAllCategories()
+	all, err := service.GetAllCategories(context.Background())
 	if err != nil {
 		t.Fatalf("expected all categories success, got %v", err)
 	}
@@ -52,7 +53,7 @@ func TestCategoryServiceCRUD(t *testing.T) {
 		t.Fatal("expected at least one category")
 	}
 
-	updated, err := service.UpdateCategory(category.ID, map[string]interface{}{
+	updated, err := service.UpdateCategory(context.Background(), category.ID, map[string]interface{}{
 		"name":        category.Name + "-updated",
 		"description": "Updated description",
 	})
@@ -63,7 +64,7 @@ func TestCategoryServiceCRUD(t *testing.T) {
 		t.Fatalf("expected updated description, got %s", updated.Description)
 	}
 
-	if err := service.DeleteCategory(category.ID); err != nil {
+	if err := service.DeleteCategory(context.Background(), category.ID); err != nil {
 		t.Fatalf("expected delete success, got %v", err)
 	}
 }
@@ -72,7 +73,7 @@ func TestCategoryServiceUpdateNotFound(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewCategoryService(tx)
 
-	_, err := service.UpdateCategory(999999, map[string]interface{}{"name": "x"})
+	_, err := service.UpdateCategory(context.Background(), 999999, map[string]interface{}{"name": "x"})
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}
@@ -82,7 +83,7 @@ func TestCategoryServiceDeleteNotFound(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewCategoryService(tx)
 
-	err := service.DeleteCategory(999999)
+	err := service.DeleteCategory(context.Background(), 999999)
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}

@@ -14,14 +14,14 @@ import (
 )
 
 var (
-	ErrEmailAlreadyUsed    = errors.New("email already used")
-	ErrInvalidCredentials  = errors.New("invalid credentials")
-	ErrUserNotFound        = errors.New("user not found")
+	ErrEmailAlreadyUsed   = errors.New("email already used")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserNotFound       = errors.New("user not found")
 )
 
 type AuthServiceInterface interface {
-	Login(email, password string) (string, error)
-	Register(email, password string) (*models.User, error)
+	Login(ctx context.Context, email, password string) (string, error)
+	Register(ctx context.Context, email, password string) (*models.User, error)
 }
 
 type AuthService struct {
@@ -36,8 +36,8 @@ func NewAuthService(db *gorm.DB, jwtSecret string) *AuthService {
 	}
 }
 
-func (s *AuthService) Register(email, password string) (*models.User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.DBTimeout)
+func (s *AuthService) Register(ctx context.Context, email, password string) (*models.User, error) {
+	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
 	user := &models.User{
@@ -62,8 +62,8 @@ func (s *AuthService) Register(email, password string) (*models.User, error) {
 	return user, nil
 }
 
-func (s *AuthService) Login(email, password string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.DBTimeout)
+func (s *AuthService) Login(ctx context.Context, email, password string) (string, error) {
+	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
 	var user models.User

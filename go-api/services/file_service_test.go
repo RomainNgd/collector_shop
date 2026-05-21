@@ -51,13 +51,14 @@ func TestNewFileService(t *testing.T) {
 
 func TestFileServiceSaveImage(t *testing.T) {
 	dir := t.TempDir()
-	service, err := NewFileService(&config.UploadConfig{Dir: dir, MaxFileSize: 10})
+	service, err := NewFileService(&config.UploadConfig{Dir: dir, MaxFileSize: 32})
 	if err != nil {
 		t.Fatalf("expected service init, got %v", err)
 	}
+	validPNG := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00}
 
 	t.Run("rejects oversized files", func(t *testing.T) {
-		file := buildMultipartHeader(t, "image", "photo.png", []byte("01234567890"))
+		file := buildMultipartHeader(t, "image", "photo.png", []byte(strings.Repeat("0", 33)))
 		_, err := service.SaveImage(file)
 		if err != ErrFileTooLarge {
 			t.Fatalf("expected ErrFileTooLarge, got %v", err)
@@ -72,8 +73,16 @@ func TestFileServiceSaveImage(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects invalid image content", func(t *testing.T) {
+		file := buildMultipartHeader(t, "image", "photo.png", []byte("not really png"))
+		_, err := service.SaveImage(file)
+		if err != ErrInvalidFileFormat {
+			t.Fatalf("expected ErrInvalidFileFormat, got %v", err)
+		}
+	})
+
 	t.Run("saves allowed images", func(t *testing.T) {
-		file := buildMultipartHeader(t, "image", "photo.png", []byte("1234"))
+		file := buildMultipartHeader(t, "image", "photo.png", validPNG)
 		filename, err := service.SaveImage(file)
 		if err != nil {
 			t.Fatalf("expected image save, got %v", err)

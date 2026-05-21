@@ -40,3 +40,13 @@ npm run build
 You can preview the production build with `npm run preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+
+## Runtime configuration
+
+The SvelteKit server expects:
+
+- `API_BASE_URL`: internal API URL used by SSR requests.
+- `API_PUBLIC_BASE_URL`: public API URL used to build browser-visible image URLs.
+- `JWT_SECRET`: same value as `go-api`, used to verify JWT cookies before populating `locals.user`.
+
+Generated coverage reports are ignored by Prettier via `.prettierignore`; lint should cover source files, not generated HTML reports.

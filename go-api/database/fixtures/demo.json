@@ -19,18 +19,18 @@
   ],
   "users": [
     {
-      "email": "admin@collector.local",
-      "password": "Admin123!",
+      "email": "admin@admin.fr",
+      "password": "Test123456!",
       "role": "ROLE_ADMIN"
     },
     {
-      "email": "user@collector.local",
-      "password": "User123!",
+      "email": "user@user.fr",
+      "password": "Test123456!",
       "role": "ROLE_USER"
     },
     {
-      "email": "collector@collector.local",
-      "password": "Collector123!",
+      "email": "user2@user.fr",
+      "password": "Test123456!",
       "role": "ROLE_USER"
     }
   ],
@@ -76,6 +76,41 @@
       "image": "seed-gameboy-pikachu.svg",
       "price": 219.9,
       "category": "Demo - Retro gaming"
+    }
+  ],
+  "promotions": [
+    {
+      "name": "Demo - Weekend scelle",
+      "description": "Remise reservee aux displays et booster boxes du moment.",
+      "type": "percentage",
+      "value": 10,
+      "is_active": true,
+      "applies_to_all": false,
+      "products": [
+        "Demo - Display Pokemon 151 JP",
+        "Demo - Display One Piece Wings of the Captain"
+      ]
+    },
+    {
+      "name": "Demo - Accessoires malins",
+      "description": "Petit coup de pouce fixe sur les accessoires de protection.",
+      "type": "fixed",
+      "value": 5,
+      "is_active": true,
+      "applies_to_all": false,
+      "products": [
+        "Demo - Classeur Top Loader 9 cases",
+        "Demo - Coffret acrylic premium"
+      ]
+    },
+    {
+      "name": "Demo - Offre vitrine",
+      "description": "Promotion globale de demonstration pour illustrer les prix barres.",
+      "type": "percentage",
+      "value": 3,
+      "is_active": true,
+      "applies_to_all": true,
+      "products": []
     }
   ]
 }

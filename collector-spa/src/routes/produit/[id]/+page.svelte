@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import ProductPrice from '$lib/components/ProductPrice.svelte';
+	import { getPromotionBadgeLabel } from '$lib/promotions';
 	import { addToCart } from '$lib/stores/cart';
 	import { onDestroy } from 'svelte';
 	import type { PageData } from './$types';
@@ -26,12 +28,17 @@
 			clearTimeout(timeoutId);
 		}
 	});
+
+	const promotionBadgeLabel = $derived(getPromotionBadgeLabel(data.product.promotion));
 </script>
 
 <section class="product-page theme-panel p-6 md:p-10">
 	<div class="grid grid-cols-1 gap-10 lg:grid-cols-[1.05fr_1fr]">
 		<div class="image-shell">
 			<span class="theme-pill image-pill">{data.product.category}</span>
+			{#if promotionBadgeLabel}
+				<span class="promotion-badge">{promotionBadgeLabel}</span>
+			{/if}
 			<img src={data.product.imageUrl} alt={data.product.name} class="product-image" />
 		</div>
 
@@ -53,7 +60,9 @@
 				</div>
 			</div>
 
-			<p class="theme-price mt-8 text-4xl font-black">{data.product.price} EUR</p>
+			<div class="mt-8">
+				<ProductPrice product={data.product} size="lg" />
+			</div>
 
 			<div class="mt-8 flex flex-wrap gap-3">
 				<button
@@ -98,6 +107,22 @@
 		top: 1.25rem;
 		left: 1.25rem;
 		z-index: 2;
+	}
+
+	.promotion-badge {
+		position: absolute;
+		top: 1.25rem;
+		right: 1.25rem;
+		z-index: 2;
+		border-radius: 999px;
+		background: linear-gradient(135deg, #f04444 0%, #c91f37 100%);
+		padding: 0.45rem 0.9rem;
+		font-size: 0.8rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: white;
+		box-shadow: 0 12px 24px rgb(201 31 55 / 0.18);
 	}
 
 	.product-image {

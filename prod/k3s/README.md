@@ -21,6 +21,8 @@ kubectl create secret docker-registry dockerhub-pull-secret `
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 - Modifier les secrets dans `secret.yaml`.
+- `JWT_SECRET` est utilise par l'API et par le front SSR: les deux doivent partager exactement la meme valeur pour verifier les cookies de session.
+- Si Stripe est active, renseigne aussi `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` et garde `STRIPE_CHECKOUT_ALLOWED_ORIGINS` aligne avec l'origine publique du front.
 - `metrics-server` doit etre installe si tu veux que le `HorizontalPodAutoscaler` fonctionne.
 - Verifie que `kubectl top pods -n collector-shop-prod` repond avant de lancer un test de charge.
 
@@ -86,4 +88,5 @@ Si tu attaques l'Ingress via l'IP du noeud plutot que via `collector-app.romainn
 
 - `API_BASE_URL` est interne au cluster (`http://go-api:8080`) pour le SSR.
 - `API_PUBLIC_BASE_URL` est publique (`http://collector-api.romainnigond.fr`) pour les URLs d'images dans le navigateur.
+- `STRIPE_CHECKOUT_ALLOWED_ORIGINS` limite les URLs de retour Checkout acceptees par l'API. C'est volontaire pour eviter qu'un client fournisse une redirection arbitraire.
 - Le scenario de charge est prevu pour montrer le scale-out du front. L'API `go-api` reste mono-replica dans cette base k3s.

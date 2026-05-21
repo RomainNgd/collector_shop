@@ -12,3 +12,6 @@ npm ci
 
 echo "Running Svelte checks"
 npm run check
+
+echo "Running frontend unit tests"
+npm test

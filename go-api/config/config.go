@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -13,6 +14,7 @@ type Config struct {
 	Database DatabaseConfig
 	JWT      JWTConfig
 	Upload   UploadConfig
+	Stripe   StripeConfig
 }
 
 type ServerConfig struct {
@@ -35,6 +37,13 @@ type JWTConfig struct {
 type UploadConfig struct {
 	Dir         string
 	MaxFileSize int64
+}
+
+type StripeConfig struct {
+	Enabled                bool
+	SecretKey              string
+	WebhookSecret          string
+	CheckoutAllowedOrigins []string
 }
 
 func Load() (*Config, error) {
@@ -61,6 +70,12 @@ func Load() (*Config, error) {
 			Dir:         getEnv("UPLOAD_DIR", "./upload"),
 			MaxFileSize: getEnvAsInt64("MAX_FILE_SIZE", 5242880), // 5MB default
 		},
+		Stripe: StripeConfig{
+			Enabled:                getEnv("STRIPE_ENABLED", "false") == "true",
+			SecretKey:              getEnv("STRIPE_SECRET_KEY", ""),
+			WebhookSecret:          getEnv("STRIPE_WEBHOOK_SECRET", ""),
+			CheckoutAllowedOrigins: getEnvList("STRIPE_CHECKOUT_ALLOWED_ORIGINS"),
+		},
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -81,7 +96,39 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("JWT_SECRET is required")
 	}
 
+	if c.Stripe.Enabled {
+		if c.Stripe.SecretKey == "" {
+			return fmt.Errorf("STRIPE_SECRET_KEY is required when STRIPE_ENABLED=true")
+		}
+
+		if c.Stripe.WebhookSecret == "" {
+			return fmt.Errorf("STRIPE_WEBHOOK_SECRET is required when STRIPE_ENABLED=true")
+		}
+
+		if len(c.Stripe.CheckoutAllowedOrigins) == 0 {
+			return fmt.Errorf("STRIPE_CHECKOUT_ALLOWED_ORIGINS is required when STRIPE_ENABLED=true")
+		}
+	}
+
 	return nil
+}
+
+func getEnvList(key string) []string {
+	value := os.Getenv(key)
+	if value == "" {
+		return nil
+	}
+
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+
+	return result
 }
 
 func getEnv(key, defaultValue string) string {

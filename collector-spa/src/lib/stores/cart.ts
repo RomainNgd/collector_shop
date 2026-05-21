@@ -4,6 +4,33 @@ import type { CartItem, Product } from '$lib/types';
 
 const STORAGE_KEY = 'collector-shop-cart-v1';
 
+const normalizeProduct = (product: Product): Product => ({
+	...product,
+	basePrice: typeof product.basePrice === 'number' ? product.basePrice : product.price,
+	promotion: product.promotion ?? null
+});
+
+const normalizeCartItems = (items: unknown): CartItem[] => {
+	if (!Array.isArray(items)) {
+		return [];
+	}
+
+	return items.flatMap((item) => {
+		if (!item || typeof item !== 'object') {
+			return [];
+		}
+
+		const quantity = Number((item as { quantity?: unknown }).quantity);
+		const product = (item as { product?: Product }).product;
+
+		if (!product || typeof product !== 'object' || !Number.isFinite(quantity) || quantity <= 0) {
+			return [];
+		}
+
+		return [{ product: normalizeProduct(product), quantity }];
+	});
+};
+
 const loadInitialCart = (): CartItem[] => {
 	if (!browser) {
 		return [];
@@ -16,7 +43,7 @@ const loadInitialCart = (): CartItem[] => {
 		}
 
 		const parsed = JSON.parse(saved) as unknown;
-		return Array.isArray(parsed) ? (parsed as CartItem[]) : [];
+		return normalizeCartItems(parsed);
 	} catch {
 		return [];
 	}
@@ -42,14 +69,16 @@ export const cartTotal = derived(cart, (items) =>
 );
 
 export const addToCart = (product: Product) => {
+	const normalizedProduct = normalizeProduct(product);
+
 	cart.update((items) => {
-		const existing = items.find((item) => item.product.id === product.id);
+		const existing = items.find((item) => item.product.id === normalizedProduct.id);
 		if (!existing) {
-			return [...items, { product, quantity: 1 }];
+			return [...items, { product: normalizedProduct, quantity: 1 }];
 		}
 
 		return items.map((item) =>
-			item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+			item.product.id === normalizedProduct.id ? { ...item, quantity: item.quantity + 1 } : item
 		);
 	});
 

@@ -27,7 +27,9 @@ func NewProductHandler(productService services.ProductServiceInterface, category
 }
 
 func (h *ProductHandler) FindProduct(c *gin.Context) {
-	products, err := h.productService.GetAllProducts()
+	ctx := c.Request.Context()
+
+	products, err := h.productService.GetAllProducts(ctx)
 	if err != nil {
 		logger.Error("Failed to fetch products: %v", err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch products", nil)
@@ -37,13 +39,15 @@ func (h *ProductHandler) FindProduct(c *gin.Context) {
 }
 
 func (h *ProductHandler) FindOneProduct(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
 		return
 	}
 
-	product, err := h.productService.GetProductByID(uint(id))
+	product, err := h.productService.GetProductByID(ctx, uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
@@ -58,6 +62,8 @@ func (h *ProductHandler) FindOneProduct(c *gin.Context) {
 }
 
 func (h *ProductHandler) CreateProduct(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	var req CreateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
@@ -72,7 +78,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		CategoryID:  req.CategoryID,
 	}
 
-	if _, err := h.categoryService.GetCategoryByID(req.CategoryID); err != nil {
+	if _, err := h.categoryService.GetCategoryByID(ctx, req.CategoryID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusBadRequest, "CATEGORY_NOT_FOUND", "Category not found", nil)
 			return
@@ -82,7 +88,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	if err := h.productService.CreateProduct(product); err != nil {
+	if err := h.productService.CreateProduct(ctx, product); err != nil {
 		logger.Error("Failed to create product: %v", err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create product", nil)
 		return
@@ -92,6 +98,8 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 }
 
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
@@ -112,7 +120,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		"category_id": req.CategoryID,
 	}
 
-	if _, err := h.categoryService.GetCategoryByID(req.CategoryID); err != nil {
+	if _, err := h.categoryService.GetCategoryByID(ctx, req.CategoryID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusBadRequest, "CATEGORY_NOT_FOUND", "Category not found", nil)
 			return
@@ -122,7 +130,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	product, err := h.productService.UpdateProduct(uint(id), updates)
+	product, err := h.productService.UpdateProduct(ctx, uint(id), updates)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
@@ -137,13 +145,15 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 }
 
 func (h *ProductHandler) DeleteProduct(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
 		return
 	}
 
-	if err := h.productService.DeleteProduct(uint(id)); err != nil {
+	if err := h.productService.DeleteProduct(ctx, uint(id)); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
 			return
@@ -157,13 +167,15 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 }
 
 func (h *ProductHandler) UploadProductImage(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
 		return
 	}
 
-	product, err := h.productService.GetProductByID(uint(id))
+	product, err := h.productService.GetProductByID(ctx, uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
@@ -199,7 +211,7 @@ func (h *ProductHandler) UploadProductImage(c *gin.Context) {
 		_ = h.fileService.DeleteImage(product.Image)
 	}
 
-	updated, err := h.productService.UpdateProduct(uint(id), map[string]interface{}{"image": filename})
+	updated, err := h.productService.UpdateProduct(ctx, uint(id), map[string]interface{}{"image": filename})
 	if err != nil {
 		logger.Error("Failed to update product %d with image: %v", id, err)
 		_ = h.fileService.DeleteImage(filename)
@@ -211,13 +223,15 @@ func (h *ProductHandler) UploadProductImage(c *gin.Context) {
 }
 
 func (h *ProductHandler) DeleteProductImage(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
 		return
 	}
 
-	product, err := h.productService.GetProductByID(uint(id))
+	product, err := h.productService.GetProductByID(ctx, uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
@@ -234,7 +248,7 @@ func (h *ProductHandler) DeleteProductImage(c *gin.Context) {
 		}
 	}
 
-	updated, err := h.productService.UpdateProduct(uint(id), map[string]interface{}{"image": ""})
+	updated, err := h.productService.UpdateProduct(ctx, uint(id), map[string]interface{}{"image": ""})
 	if err != nil {
 		logger.Error("Failed to update product %d: %v", id, err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update product", nil)

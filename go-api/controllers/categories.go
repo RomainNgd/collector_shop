@@ -23,7 +23,9 @@ func NewCategoryHandler(categoryService services.CategoryServiceInterface) *Cate
 }
 
 func (h *CategoryHandler) FindCategory(c *gin.Context) {
-	categories, err := h.categoryService.GetAllCategories()
+	ctx := c.Request.Context()
+
+	categories, err := h.categoryService.GetAllCategories(ctx)
 	if err != nil {
 		logger.Error("Failed to fetch categories: %v", err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch categories", nil)
@@ -34,13 +36,15 @@ func (h *CategoryHandler) FindCategory(c *gin.Context) {
 }
 
 func (h *CategoryHandler) FindOneCategory(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid category ID", nil)
 		return
 	}
 
-	category, err := h.categoryService.GetCategoryByID(uint(id))
+	category, err := h.categoryService.GetCategoryByID(ctx, uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "CATEGORY_NOT_FOUND", "Category not found", nil)
@@ -55,6 +59,8 @@ func (h *CategoryHandler) FindOneCategory(c *gin.Context) {
 }
 
 func (h *CategoryHandler) CreateCategory(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	var req CreateCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
@@ -66,7 +72,7 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 		Description: req.Description,
 	}
 
-	if err := h.categoryService.CreateCategory(category); err != nil {
+	if err := h.categoryService.CreateCategory(ctx, category); err != nil {
 		logger.Error("Failed to create category: %v", err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create category", nil)
 		return
@@ -76,6 +82,8 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 }
 
 func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid category ID", nil)
@@ -93,7 +101,7 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 		"description": req.Description,
 	}
 
-	category, err := h.categoryService.UpdateCategory(uint(id), updates)
+	category, err := h.categoryService.UpdateCategory(ctx, uint(id), updates)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "CATEGORY_NOT_FOUND", "Category not found", nil)
@@ -108,13 +116,15 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 }
 
 func (h *CategoryHandler) DeleteCategory(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid category ID", nil)
 		return
 	}
 
-	if err := h.categoryService.DeleteCategory(uint(id)); err != nil {
+	if err := h.categoryService.DeleteCategory(ctx, uint(id)); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "CATEGORY_NOT_FOUND", "Category not found", nil)
 			return

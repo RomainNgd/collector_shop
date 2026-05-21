@@ -2,6 +2,18 @@ import { env } from '$env/dynamic/private';
 
 export const API_BASE_URL = env.API_BASE_URL ?? 'http://localhost:8080';
 export const API_PUBLIC_BASE_URL = env.API_PUBLIC_BASE_URL ?? API_BASE_URL;
+export const API_INTERNAL_PREFIX = '/api';
+
+const normalizeApiPath = (path: string) => {
+	if (path === '') {
+		return '/';
+	}
+
+	return path.startsWith('/') ? path : `/${path}`;
+};
+
+export const buildInternalApiPath = (path: string) =>
+	`${API_INTERNAL_PREFIX}${normalizeApiPath(path)}`;
 
 export type ApiErrorPayload = {
 	message?: string;

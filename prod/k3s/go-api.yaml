@@ -77,6 +77,26 @@ spec:
                 configMapKeyRef:
                   name: collector-shop-config
                   key: MAX_FILE_SIZE
+            - name: STRIPE_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: collector-shop-config
+                  key: STRIPE_ENABLED
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: collector-shop-secrets
+                  key: STRIPE_SECRET_KEY
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: collector-shop-secrets
+                  key: STRIPE_WEBHOOK_SECRET
+            - name: STRIPE_CHECKOUT_ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: collector-shop-config
+                  key: STRIPE_CHECKOUT_ALLOWED_ORIGINS
           volumeMounts:
             - name: go-api-uploads
               mountPath: /app/upload

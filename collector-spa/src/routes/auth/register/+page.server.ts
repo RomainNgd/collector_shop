@@ -1,4 +1,4 @@
-import { buildApiHeaders, API_BASE_URL, readApiResponse } from '$lib/server/api';
+import { buildApiHeaders, buildInternalApiPath, readApiResponse } from '$lib/server/api';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -48,7 +48,7 @@ export const actions: Actions = {
 			});
 		}
 
-		const response = await fetch(`${API_BASE_URL}/auth/register`, {
+		const response = await fetch(buildInternalApiPath('/auth/register'), {
 			method: 'POST',
 			headers: buildApiHeaders({ contentType: 'application/json' }),
 			body: JSON.stringify({ email, password })

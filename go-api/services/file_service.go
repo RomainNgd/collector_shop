@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -14,10 +15,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const imageHeaderBytes = 12
+
 var (
-	ErrFileTooLarge       = errors.New("file size exceeds maximum allowed")
-	ErrInvalidFileFormat  = errors.New("invalid file format")
-	ErrFileUploadFailed   = errors.New("file upload failed")
+	ErrFileTooLarge      = errors.New("file size exceeds maximum allowed")
+	ErrInvalidFileFormat = errors.New("invalid file format")
+	ErrFileUploadFailed  = errors.New("file upload failed")
 )
 
 type FileServiceInterface interface {
@@ -26,9 +29,9 @@ type FileServiceInterface interface {
 }
 
 type FileService struct {
-	uploadDir    string
-	maxFileSize  int64
-	allowedExts  []string
+	uploadDir   string
+	maxFileSize int64
+	allowedExts []string
 }
 
 func NewFileService(cfg *config.UploadConfig) (*FileService, error) {
@@ -61,6 +64,21 @@ func (s *FileService) SaveImage(file *multipart.FileHeader) (string, error) {
 		return "", fmt.Errorf("%w: %v", ErrFileUploadFailed, err)
 	}
 	defer src.Close()
+
+	header := make([]byte, imageHeaderBytes)
+	n, err := io.ReadFull(src, header)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("%w: %v", ErrFileUploadFailed, err)
+	}
+	header = header[:n]
+
+	if !isAllowedImageContent(ext, header) {
+		return "", ErrInvalidFileFormat
+	}
+
+	if _, err := src.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("%w: %v", ErrFileUploadFailed, err)
+	}
 
 	dst, err := os.Create(filePath)
 	if err != nil {
@@ -99,4 +117,19 @@ func (s *FileService) isAllowedExtension(ext string) bool {
 		}
 	}
 	return false
+}
+
+func isAllowedImageContent(ext string, header []byte) bool {
+	switch ext {
+	case ".jpg", ".jpeg":
+		return len(header) >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff
+	case ".png":
+		return bytes.HasPrefix(header, []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a})
+	case ".webp":
+		return len(header) >= 12 &&
+			bytes.Equal(header[0:4], []byte("RIFF")) &&
+			bytes.Equal(header[8:12], []byte("WEBP"))
+	default:
+		return false
+	}
 }

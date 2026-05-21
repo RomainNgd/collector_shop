@@ -1,4 +1,5 @@
 import { ADMIN_ROLE, USER_ROLE, type AuthUser, type UserRole } from '$lib/types';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 type JwtClaims = Record<string, unknown> & {
 	sub?: string | number;
@@ -36,6 +37,46 @@ export const decodeJwtPayload = (token: string): JwtClaims | null => {
 	} catch {
 		return null;
 	}
+};
+
+const signHS256 = (header: string, payload: string, secret: string): Buffer =>
+	createHmac('sha256', secret).update(`${header}.${payload}`).digest();
+
+const decodeJwtSignature = (signature: string): Buffer | null => {
+	try {
+		const normalized = signature.replace(/-/g, '+').replace(/_/g, '/');
+		const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+		return Buffer.from(padded, 'base64');
+	} catch {
+		return null;
+	}
+};
+
+export const verifyJwtPayload = (token: string, secret: string): JwtClaims | null => {
+	if (!secret) {
+		return null;
+	}
+
+	const parts = token.split('.');
+	if (parts.length !== 3) {
+		return null;
+	}
+
+	const [header, payload, signature] = parts;
+	const providedSignature = decodeJwtSignature(signature);
+	if (!providedSignature) {
+		return null;
+	}
+
+	const expectedSignature = signHS256(header, payload, secret);
+	if (
+		providedSignature.length !== expectedSignature.length ||
+		!timingSafeEqual(providedSignature, expectedSignature)
+	) {
+		return null;
+	}
+
+	return decodeJwtPayload(token);
 };
 
 const isKnownRole = (role: string): role is UserRole => role === ADMIN_ROLE || role === USER_ROLE;

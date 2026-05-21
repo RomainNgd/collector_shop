@@ -10,3 +10,5 @@ data:
   SPA_PORT: "3000"
   API_BASE_URL: "http://go-api:8080"
   API_PUBLIC_BASE_URL: "http://collector-api.romainnigond.fr"
+  STRIPE_ENABLED: "false"
+  STRIPE_CHECKOUT_ALLOWED_ORIGINS: "http://collector-app.romainnigond.fr"

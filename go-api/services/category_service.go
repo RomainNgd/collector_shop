@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"poc-gin/models"
-	"poc-gin/pkg/constants"
 
 	"gorm.io/gorm"
 )
@@ -13,11 +12,11 @@ import (
 var ErrCategoryInUse = errors.New("category is used by products")
 
 type CategoryServiceInterface interface {
-	GetAllCategories() ([]*models.Category, error)
-	GetCategoryByID(id uint) (*models.Category, error)
-	CreateCategory(category *models.Category) error
-	UpdateCategory(id uint, updates map[string]interface{}) (*models.Category, error)
-	DeleteCategory(id uint) error
+	GetAllCategories(ctx context.Context) ([]*models.Category, error)
+	GetCategoryByID(ctx context.Context, id uint) (*models.Category, error)
+	CreateCategory(ctx context.Context, category *models.Category) error
+	UpdateCategory(ctx context.Context, id uint, updates map[string]interface{}) (*models.Category, error)
+	DeleteCategory(ctx context.Context, id uint) error
 }
 
 type CategoryService struct {
@@ -28,8 +27,8 @@ func NewCategoryService(db *gorm.DB) *CategoryService {
 	return &CategoryService{db: db}
 }
 
-func (s *CategoryService) GetAllCategories() ([]*models.Category, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.DBTimeout)
+func (s *CategoryService) GetAllCategories(ctx context.Context) ([]*models.Category, error) {
+	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
 	var categories []*models.Category
@@ -41,8 +40,8 @@ func (s *CategoryService) GetAllCategories() ([]*models.Category, error) {
 	return categories, nil
 }
 
-func (s *CategoryService) GetCategoryByID(id uint) (*models.Category, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.DBTimeout)
+func (s *CategoryService) GetCategoryByID(ctx context.Context, id uint) (*models.Category, error) {
+	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
 	var category models.Category
@@ -54,8 +53,8 @@ func (s *CategoryService) GetCategoryByID(id uint) (*models.Category, error) {
 	return &category, nil
 }
 
-func (s *CategoryService) CreateCategory(category *models.Category) error {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.DBTimeout)
+func (s *CategoryService) CreateCategory(ctx context.Context, category *models.Category) error {
+	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
 	result := s.db.WithContext(ctx).Create(category)
@@ -66,8 +65,8 @@ func (s *CategoryService) CreateCategory(category *models.Category) error {
 	return nil
 }
 
-func (s *CategoryService) UpdateCategory(id uint, updates map[string]interface{}) (*models.Category, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.DBTimeout)
+func (s *CategoryService) UpdateCategory(ctx context.Context, id uint, updates map[string]interface{}) (*models.Category, error) {
+	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
 	var category models.Category
@@ -86,8 +85,8 @@ func (s *CategoryService) UpdateCategory(id uint, updates map[string]interface{}
 	return &category, nil
 }
 
-func (s *CategoryService) DeleteCategory(id uint) error {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.DBTimeout)
+func (s *CategoryService) DeleteCategory(ctx context.Context, id uint) error {
+	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
 	var count int64

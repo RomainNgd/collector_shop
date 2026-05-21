@@ -26,6 +26,8 @@ type SeedReport struct {
 	CategoriesUpdated int
 	ProductsCreated   int
 	ProductsUpdated   int
+	PromotionsCreated int
+	PromotionsUpdated int
 	UsersCreated      int
 	UsersUpdated      int
 	ImagesWritten     int
@@ -33,11 +35,13 @@ type SeedReport struct {
 
 func (r *SeedReport) Summary() string {
 	return fmt.Sprintf(
-		"categories created=%d updated=%d, products created=%d updated=%d, users created=%d updated=%d, images synced=%d",
+		"categories created=%d updated=%d, products created=%d updated=%d, promotions created=%d updated=%d, users created=%d updated=%d, images synced=%d",
 		r.CategoriesCreated,
 		r.CategoriesUpdated,
 		r.ProductsCreated,
 		r.ProductsUpdated,
+		r.PromotionsCreated,
+		r.PromotionsUpdated,
 		r.UsersCreated,
 		r.UsersUpdated,
 		r.ImagesWritten,
@@ -45,9 +49,10 @@ func (r *SeedReport) Summary() string {
 }
 
 type demoFixtures struct {
-	Categories []demoCategoryFixture `json:"categories"`
-	Products   []demoProductFixture  `json:"products"`
-	Users      []demoUserFixture     `json:"users"`
+	Categories []demoCategoryFixture  `json:"categories"`
+	Products   []demoProductFixture   `json:"products"`
+	Promotions []demoPromotionFixture `json:"promotions"`
+	Users      []demoUserFixture      `json:"users"`
 }
 
 type demoCategoryFixture struct {
@@ -67,6 +72,16 @@ type demoUserFixture struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Role     string `json:"role"`
+}
+
+type demoPromotionFixture struct {
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	Type         string   `json:"type"`
+	Value        float64  `json:"value"`
+	IsActive     bool     `json:"is_active"`
+	AppliesToAll bool     `json:"applies_to_all"`
+	Products     []string `json:"products"`
 }
 
 func SeedDemoData(db *gorm.DB, uploadDir string) (*SeedReport, error) {
@@ -139,6 +154,25 @@ func SeedDemoData(db *gorm.DB, uploadDir string) (*SeedReport, error) {
 		}
 	}
 
+	productIDsByName, err := buildProductIDsByName(db, fixtures.Products)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, promotionFixture := range fixtures.Promotions {
+		created, updated, err := upsertPromotion(db, promotionFixture, productIDsByName)
+		if err != nil {
+			return nil, err
+		}
+
+		if created {
+			report.PromotionsCreated++
+		}
+		if updated {
+			report.PromotionsUpdated++
+		}
+	}
+
 	return report, nil
 }
 
@@ -166,6 +200,9 @@ func validateDemoFixtures(fixtures *demoFixtures) error {
 	}
 	if len(fixtures.Products) == 0 {
 		return errors.New("demo fixtures must include at least one product")
+	}
+	if len(fixtures.Promotions) == 0 {
+		return errors.New("demo fixtures must include at least one promotion")
 	}
 	if len(fixtures.Users) == 0 {
 		return errors.New("demo fixtures must include at least one user")
@@ -225,6 +262,43 @@ func validateDemoFixtures(fixtures *demoFixtures) error {
 			return fmt.Errorf("fixture product %q is duplicated", product.Name)
 		}
 		productNames[product.Name] = struct{}{}
+	}
+
+	promotionNames := make(map[string]struct{}, len(fixtures.Promotions))
+	for _, promotion := range fixtures.Promotions {
+		if strings.TrimSpace(promotion.Name) == "" {
+			return errors.New("fixture promotion name cannot be empty")
+		}
+		if promotion.Type != models.PromotionTypePercentage && promotion.Type != models.PromotionTypeFixed {
+			return fmt.Errorf("fixture promotion %q has invalid type %q", promotion.Name, promotion.Type)
+		}
+		if promotion.Value <= 0 {
+			return fmt.Errorf("fixture promotion %q must include a positive value", promotion.Name)
+		}
+		if promotion.Type == models.PromotionTypePercentage && promotion.Value > 100 {
+			return fmt.Errorf("fixture promotion %q percentage cannot exceed 100", promotion.Name)
+		}
+		if !promotion.AppliesToAll && len(promotion.Products) == 0 {
+			return fmt.Errorf("fixture promotion %q must target at least one product", promotion.Name)
+		}
+		seenProducts := make(map[string]struct{}, len(promotion.Products))
+		for _, productName := range promotion.Products {
+			trimmedName := strings.TrimSpace(productName)
+			if trimmedName == "" {
+				return fmt.Errorf("fixture promotion %q contains an empty product reference", promotion.Name)
+			}
+			if _, exists := productNames[trimmedName]; !exists {
+				return fmt.Errorf("fixture promotion %q references unknown product %q", promotion.Name, trimmedName)
+			}
+			if _, exists := seenProducts[trimmedName]; exists {
+				return fmt.Errorf("fixture promotion %q references duplicate product %q", promotion.Name, trimmedName)
+			}
+			seenProducts[trimmedName] = struct{}{}
+		}
+		if _, exists := promotionNames[promotion.Name]; exists {
+			return fmt.Errorf("fixture promotion %q is duplicated", promotion.Name)
+		}
+		promotionNames[promotion.Name] = struct{}{}
 	}
 
 	userEmails := make(map[string]struct{}, len(fixtures.Users))
@@ -413,4 +487,146 @@ func upsertProduct(db *gorm.DB, fixture demoProductFixture, categoryID uint) (bo
 	}
 
 	return false, true, nil
+}
+
+func buildProductIDsByName(db *gorm.DB, fixtures []demoProductFixture) (map[string]uint, error) {
+	productNames := make([]string, 0, len(fixtures))
+	for _, fixture := range fixtures {
+		productNames = append(productNames, fixture.Name)
+	}
+
+	var products []models.Product
+	if err := db.Where("name IN ?", productNames).Find(&products).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch seeded products for promotions: %w", err)
+	}
+
+	productIDsByName := make(map[string]uint, len(products))
+	for _, product := range products {
+		productIDsByName[product.Name] = product.ID
+	}
+
+	if len(productIDsByName) != len(fixtures) {
+		return nil, errors.New("failed to resolve all seeded products for promotions")
+	}
+
+	return productIDsByName, nil
+}
+
+func upsertPromotion(db *gorm.DB, fixture demoPromotionFixture, productIDsByName map[string]uint) (bool, bool, error) {
+	var promotion models.Promotion
+	result := db.Where("name = ?", fixture.Name).Limit(1).Find(&promotion)
+	if result.Error != nil {
+		return false, false, fmt.Errorf("failed to fetch fixture promotion %q: %w", fixture.Name, result.Error)
+	}
+
+	productIDs := make([]uint, 0, len(fixture.Products))
+	for _, productName := range fixture.Products {
+		productID, exists := productIDsByName[productName]
+		if !exists {
+			return false, false, fmt.Errorf("fixture promotion %q references unresolved product %q", fixture.Name, productName)
+		}
+		productIDs = append(productIDs, productID)
+	}
+
+	if result.RowsAffected == 0 {
+		promotion = models.Promotion{
+			Name:         fixture.Name,
+			Description:  fixture.Description,
+			Type:         fixture.Type,
+			Value:        fixture.Value,
+			IsActive:     fixture.IsActive,
+			AppliesToAll: fixture.AppliesToAll,
+		}
+		if err := db.Create(&promotion).Error; err != nil {
+			return false, false, fmt.Errorf("failed to create fixture promotion %q: %w", fixture.Name, err)
+		}
+		if err := replacePromotionProducts(db, &promotion, productIDs); err != nil {
+			return false, false, err
+		}
+		return true, false, nil
+	}
+
+	updates := make(map[string]interface{})
+	if promotion.Description != fixture.Description {
+		updates["description"] = fixture.Description
+	}
+	if promotion.Type != fixture.Type {
+		updates["type"] = fixture.Type
+	}
+	if promotion.Value != fixture.Value {
+		updates["value"] = fixture.Value
+	}
+	if promotion.IsActive != fixture.IsActive {
+		updates["is_active"] = fixture.IsActive
+	}
+	if promotion.AppliesToAll != fixture.AppliesToAll {
+		updates["applies_to_all"] = fixture.AppliesToAll
+	}
+
+	linksChanged, err := promotionLinksChanged(db, &promotion, productIDs)
+	if err != nil {
+		return false, false, err
+	}
+
+	if len(updates) == 0 && !linksChanged {
+		return false, false, nil
+	}
+
+	if len(updates) > 0 {
+		if err := db.Model(&promotion).Updates(updates).Error; err != nil {
+			return false, false, fmt.Errorf("failed to update fixture promotion %q: %w", fixture.Name, err)
+		}
+	}
+
+	if linksChanged {
+		if err := replacePromotionProducts(db, &promotion, productIDs); err != nil {
+			return false, false, err
+		}
+	}
+
+	return false, true, nil
+}
+
+func replacePromotionProducts(db *gorm.DB, promotion *models.Promotion, productIDs []uint) error {
+	if promotion.AppliesToAll || len(productIDs) == 0 {
+		if err := db.Model(promotion).Association("Products").Clear(); err != nil {
+			return fmt.Errorf("failed to clear fixture promotion products for %q: %w", promotion.Name, err)
+		}
+		return nil
+	}
+
+	var products []models.Product
+	if err := db.Where("id IN ?", productIDs).Order("id ASC").Find(&products).Error; err != nil {
+		return fmt.Errorf("failed to fetch fixture promotion products for %q: %w", promotion.Name, err)
+	}
+
+	if err := db.Model(promotion).Association("Products").Replace(products); err != nil {
+		return fmt.Errorf("failed to replace fixture promotion products for %q: %w", promotion.Name, err)
+	}
+
+	return nil
+}
+
+func promotionLinksChanged(db *gorm.DB, promotion *models.Promotion, expectedProductIDs []uint) (bool, error) {
+	var currentProducts []models.Product
+	if err := db.Model(promotion).Association("Products").Find(&currentProducts); err != nil {
+		return false, fmt.Errorf("failed to load fixture promotion products for %q: %w", promotion.Name, err)
+	}
+
+	if len(currentProducts) != len(expectedProductIDs) {
+		return true, nil
+	}
+
+	currentIDs := make(map[uint]struct{}, len(currentProducts))
+	for _, product := range currentProducts {
+		currentIDs[product.ID] = struct{}{}
+	}
+
+	for _, expectedID := range expectedProductIDs {
+		if _, exists := currentIDs[expectedID]; !exists {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

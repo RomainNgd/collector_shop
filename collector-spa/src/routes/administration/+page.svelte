@@ -1,13 +1,17 @@
 <script lang="ts">
-	import type { Category, Product } from '$lib/types';
+	import AdminDashboard from '$lib/components/AdminDashboard.svelte';
+	import ProductPrice from '$lib/components/ProductPrice.svelte';
+	import { formatPromotionScope, formatPromotionValue } from '$lib/promotions';
+	import type { Category, Product, Promotion } from '$lib/types';
 	import type { ActionData, PageData } from './$types';
 
-	type AdminSection = 'dashboard' | 'products' | 'categories';
+	type AdminSection = 'dashboard' | 'products' | 'categories' | 'promotions';
 
 	const adminSections = [
 		{ id: 'dashboard' as const, title: 'Dashboard', description: 'Vue rapide et indicateurs' },
 		{ id: 'products' as const, title: 'Produits', description: 'Catalogue et images' },
-		{ id: 'categories' as const, title: 'Categories', description: 'Taxonomie du shop' }
+		{ id: 'categories' as const, title: 'Categories', description: 'Taxonomie du shop' },
+		{ id: 'promotions' as const, title: 'Promotions', description: 'Remises globales ou ciblees' }
 	];
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -21,53 +25,14 @@
 	let isEditCategoryModalOpen = $state(false);
 	let isDeleteCategoryModalOpen = $state(false);
 	let selectedCategory = $state<Category | null>(null);
-
-	const dashboardMetrics = $derived.by(() => {
-		const productsCount = data.products.length;
-		const categoriesCount = data.categories.length;
-		const totalCatalogValue = data.products.reduce((total, product) => total + product.price, 0);
-		const uncategorizedCount = data.products.filter(
-			(product) => product.category.trim().toLowerCase() === 'non-classe'
-		).length;
-
-		return { productsCount, categoriesCount, totalCatalogValue, uncategorizedCount };
-	});
-
-	const dashboardCards = $derived.by(() => [
-		{
-			label: 'Produits',
-			value: dashboardMetrics.productsCount,
-			description: 'Articles visibles dans le catalogue'
-		},
-		{
-			label: 'Categories',
-			value: dashboardMetrics.categoriesCount,
-			description: 'Axes de classement disponibles'
-		},
-		{
-			label: 'Valeur catalogue',
-			value: `${dashboardMetrics.totalCatalogValue.toFixed(2)} EUR`,
-			description: 'Somme des prix affiches'
-		},
-		{
-			label: 'A classer',
-			value: dashboardMetrics.uncategorizedCount,
-			description: 'Produits encore non classes'
-		}
-	]);
-
-	const categoryInsights = $derived.by(() => {
-		const counts: Record<string, number> = {};
-		for (const product of data.products) {
-			const key = product.category.trim() || 'non-classe';
-			counts[key] = (counts[key] ?? 0) + 1;
-		}
-
-		return Object.entries(counts)
-			.map(([name, count]) => ({ name, count }))
-			.sort((a, b) => b.count - a.count)
-			.slice(0, 4);
-	});
+	let isCreatePromotionModalOpen = $state(false);
+	let isEditPromotionModalOpen = $state(false);
+	let isDeletePromotionModalOpen = $state(false);
+	let selectedPromotion = $state<Promotion | null>(null);
+	let createPromotionGlobal = $state(false);
+	let createPromotionActive = $state(true);
+	let editPromotionGlobal = $state(false);
+	let editPromotionActive = $state(true);
 
 	const findProductById = (id: string | undefined) => {
 		const numericId = Number(id);
@@ -80,6 +45,13 @@
 		const numericId = Number(id);
 		return Number.isFinite(numericId)
 			? (data.categories.find((category) => category.id === numericId) ?? null)
+			: null;
+	};
+
+	const findPromotionById = (id: string | undefined) => {
+		const numericId = Number(id);
+		return Number.isFinite(numericId)
+			? (data.promotions.find((promotion) => promotion.id === numericId) ?? null)
 			: null;
 	};
 
@@ -104,6 +76,11 @@
 			(product) => product.category.trim().toLowerCase() === categoryName.trim().toLowerCase()
 		).length;
 
+	const countPromotionsForProduct = (productId: number) =>
+		data.promotions.filter(
+			(promotion) => promotion.appliesToAll || promotion.productIds.includes(productId)
+		).length;
+
 	const closeAllModals = () => {
 		isCreateProductModalOpen = false;
 		isEditProductModalOpen = false;
@@ -111,6 +88,9 @@
 		isCreateCategoryModalOpen = false;
 		isEditCategoryModalOpen = false;
 		isDeleteCategoryModalOpen = false;
+		isCreatePromotionModalOpen = false;
+		isEditPromotionModalOpen = false;
+		isDeletePromotionModalOpen = false;
 	};
 
 	$effect(() => {
@@ -157,10 +137,37 @@
 			}
 		}
 
+		if (form?.action === 'create-promotion' && (form.error || form.promotionValues)) {
+			activeSection = 'promotions';
+			isCreatePromotionModalOpen = true;
+			createPromotionGlobal = form.promotionValues?.appliesToAll === 'true';
+			createPromotionActive = form.promotionValues?.isActive !== 'false';
+		}
+
+		if (form?.action === 'edit-promotion') {
+			activeSection = 'promotions';
+			selectedPromotion =
+				findPromotionById(form.promotionValues?.id ?? form.promotionId) ?? selectedPromotion;
+			if (form.error || form.promotionValues) {
+				isEditPromotionModalOpen = true;
+			}
+			editPromotionGlobal = form.promotionValues?.appliesToAll === 'true';
+			editPromotionActive = form.promotionValues?.isActive !== 'false';
+		}
+
+		if (form?.action === 'delete-promotion') {
+			activeSection = 'promotions';
+			selectedPromotion = findPromotionById(form.promotionId) ?? selectedPromotion;
+			if (form.error || form.promotionId) {
+				isDeletePromotionModalOpen = true;
+			}
+		}
+
 		if (form?.success) {
 			closeAllModals();
 			selectedProduct = null;
 			selectedCategory = null;
+			selectedPromotion = null;
 		}
 	});
 
@@ -204,6 +211,30 @@
 		isDeleteCategoryModalOpen = true;
 	};
 
+	const openCreatePromotionModal = () => {
+		closeAllModals();
+		activeSection = 'promotions';
+		createPromotionGlobal = false;
+		createPromotionActive = true;
+		isCreatePromotionModalOpen = true;
+	};
+
+	const openEditPromotionModal = (promotion: Promotion) => {
+		closeAllModals();
+		activeSection = 'promotions';
+		selectedPromotion = promotion;
+		editPromotionGlobal = promotion.appliesToAll;
+		editPromotionActive = promotion.isActive;
+		isEditPromotionModalOpen = true;
+	};
+
+	const openDeletePromotionModal = (promotion: Promotion) => {
+		closeAllModals();
+		activeSection = 'promotions';
+		selectedPromotion = promotion;
+		isDeletePromotionModalOpen = true;
+	};
+
 	const closeProductEditModal = () => {
 		isEditProductModalOpen = false;
 		selectedProduct = null;
@@ -222,6 +253,16 @@
 	const closeCategoryDeleteModal = () => {
 		isDeleteCategoryModalOpen = false;
 		selectedCategory = null;
+	};
+
+	const closePromotionEditModal = () => {
+		isEditPromotionModalOpen = false;
+		selectedPromotion = null;
+	};
+
+	const closePromotionDeleteModal = () => {
+		isDeletePromotionModalOpen = false;
+		selectedPromotion = null;
 	};
 </script>
 
@@ -268,59 +309,11 @@
 	</div>
 
 	{#if activeSection === 'dashboard'}
-		<section class="space-y-6">
-			<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-				{#each dashboardCards as card (card.label)}
-					<article class="theme-card theme-hover-lift p-6">
-						<p class="theme-kicker">{card.label}</p>
-						<p class="theme-title mt-3 text-4xl font-black">{card.value}</p>
-						<p class="theme-copy mt-2 text-sm">{card.description}</p>
-					</article>
-				{/each}
-			</div>
-
-			<div class="grid gap-6 xl:grid-cols-[1.45fr_1fr]">
-				<div class="theme-panel p-6">
-					<div class="flex items-start justify-between gap-4">
-						<div>
-							<p class="theme-kicker">Roadmap ventes</p>
-							<h2 class="theme-title mt-3 text-2xl font-black">Vue ventes a venir</h2>
-							<p class="theme-copy mt-3 max-w-xl">
-								Bloc pret pour accueillir les stats de commandes des que l'API ventes sera
-								disponible.
-							</p>
-						</div>
-						<span class="theme-pill theme-pill-contrast">Bientot</span>
-					</div>
-
-					<div class="mt-6 grid gap-4 md:grid-cols-2">
-						<article class="theme-card p-4">
-							<p class="theme-kicker">Objectif</p>
-							<p class="theme-title mt-2 font-bold">KPI commandes, CA et panier moyen</p>
-						</article>
-						<article class="theme-card p-4">
-							<p class="theme-kicker">Suivi</p>
-							<p class="theme-title mt-2 font-bold">Bloc reserve aux futurs indicateurs</p>
-						</article>
-					</div>
-				</div>
-
-				<div class="theme-panel p-6">
-					<p class="theme-kicker">Categories</p>
-					<h2 class="theme-title mt-3 text-2xl font-black">Les plus remplies</h2>
-					<div class="mt-5 space-y-3">
-						{#each categoryInsights as insight (insight.name)}
-							<div class="insight-row">
-								<p class="theme-title font-semibold">{insight.name}</p>
-								<span class="theme-pill">
-									{insight.count} produit{insight.count > 1 ? 's' : ''}
-								</span>
-							</div>
-						{/each}
-					</div>
-				</div>
-			</div>
-		</section>
+		<AdminDashboard
+			products={data.products}
+			categories={data.categories}
+			promotions={data.promotions}
+		/>
 	{/if}
 
 	{#if activeSection === 'products'}
@@ -359,6 +352,7 @@
 								<th>Description</th>
 								<th>Categorie</th>
 								<th>Image</th>
+								<th>Promotions</th>
 								<th>Prix</th>
 								<th>Actions</th>
 							</tr>
@@ -382,7 +376,10 @@
 									<td class="theme-copy text-sm">{product.description}</td>
 									<td class="theme-copy text-sm">{product.category}</td>
 									<td class="theme-copy text-sm">{product.imageName ?? 'Aucune image'}</td>
-									<td class="theme-title font-semibold">{product.price.toFixed(2)} EUR</td>
+									<td class="theme-copy text-sm">{countPromotionsForProduct(product.id)}</td>
+									<td>
+										<ProductPrice {product} size="sm" />
+									</td>
 									<td>
 										<div class="action-row">
 											<button
@@ -486,6 +483,91 @@
 			</div>
 		</section>
 	{/if}
+
+	{#if activeSection === 'promotions'}
+		<section class="space-y-6">
+			<div class="theme-panel p-8">
+				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+					<div>
+						<p class="theme-kicker">Promotions</p>
+						<h2 class="theme-title mt-3 text-3xl font-black">Administration des promotions</h2>
+						<p class="theme-copy mt-2">
+							Configure des remises globales ou ciblees, en pourcentage ou en montant fixe.
+						</p>
+					</div>
+					<button
+						type="button"
+						class="theme-button theme-button-primary"
+						onclick={openCreatePromotionModal}
+					>
+						Ajouter une promotion
+					</button>
+				</div>
+			</div>
+
+			<div class="theme-panel overflow-hidden">
+				<div class="table-toolbar">
+					<div>
+						<p class="theme-kicker">Remises</p>
+						<h3 class="theme-title mt-2 text-2xl font-black">Liste des promotions</h3>
+						<p class="theme-copy mt-2 text-sm">{data.promotions.length} promotions</p>
+					</div>
+				</div>
+
+				<div class="overflow-x-auto">
+					<table class="theme-table min-w-full">
+						<thead>
+							<tr>
+								<th>Promotion</th>
+								<th>Portee</th>
+								<th>Remise</th>
+								<th>Statut</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each data.promotions as promotion (promotion.id)}
+								<tr>
+									<td>
+										<p class="theme-title font-bold">{promotion.name}</p>
+										<p class="theme-copy mt-1 text-sm">ID #{promotion.id}</p>
+										<p class="theme-copy mt-3 max-w-md text-sm">
+											{promotion.description || 'Aucune description'}
+										</p>
+									</td>
+									<td class="theme-copy text-sm">{formatPromotionScope(promotion)}</td>
+									<td class="theme-title font-semibold">{formatPromotionValue(promotion)}</td>
+									<td>
+										<span class={`theme-pill ${promotion.isActive ? '' : 'theme-pill-contrast'}`}>
+											{promotion.isActive ? 'Active' : 'Inactive'}
+										</span>
+									</td>
+									<td>
+										<div class="action-row">
+											<button
+												type="button"
+												class="theme-button theme-button-secondary action-button"
+												onclick={() => openEditPromotionModal(promotion)}
+											>
+												Modifier
+											</button>
+											<button
+												type="button"
+												class="theme-button theme-button-contrast action-button"
+												onclick={() => openDeletePromotionModal(promotion)}
+											>
+												Supprimer
+											</button>
+										</div>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</section>
+	{/if}
 </section>
 
 {#if isCreateProductModalOpen}
@@ -531,7 +613,7 @@
 						id="create-price"
 						name="price"
 						type="number"
-						min="0"
+						min="0.01"
 						step="0.01"
 						required
 						value={form?.action === 'create-product' ? (form.values?.price ?? '') : ''}
@@ -639,12 +721,12 @@
 						id="edit-price"
 						name="price"
 						type="number"
-						min="0"
+						min="0.01"
 						step="0.01"
 						required
 						value={form?.action === 'edit-product'
-							? (form.values?.price ?? String(selectedProduct?.price ?? ''))
-							: String(selectedProduct?.price ?? '')}
+							? (form.values?.price ?? String(selectedProduct?.basePrice ?? ''))
+							: String(selectedProduct?.basePrice ?? '')}
 						class="theme-input"
 					/>
 				</div>
@@ -945,6 +1027,371 @@
 	</div>
 {/if}
 
+{#if isCreatePromotionModalOpen}
+	<div class="theme-overlay fixed inset-0 z-40 flex items-center justify-center px-4 py-8">
+		<div class="theme-modal w-full max-w-3xl p-8">
+			<div class="modal-header">
+				<div>
+					<p class="theme-kicker">Nouvelle promotion</p>
+					<h2 class="theme-title mt-3 text-2xl font-black">Ajouter une promotion</h2>
+					<p class="theme-copy mt-2 text-sm">
+						Choisis une remise globale ou rattache-la a un ou plusieurs produits.
+					</p>
+				</div>
+				<button
+					type="button"
+					class="theme-icon-button theme-close"
+					onclick={() => (isCreatePromotionModalOpen = false)}
+				>
+					X
+				</button>
+			</div>
+
+			<form method="POST" action="?/createPromotion" class="mt-6 space-y-4">
+				<div class="promotion-form-grid">
+					<div>
+						<label for="create-promotion-name" class="theme-label">Nom</label>
+						<input
+							id="create-promotion-name"
+							name="name"
+							type="text"
+							required
+							value={form?.action === 'create-promotion' ? (form.promotionValues?.name ?? '') : ''}
+							class="theme-input"
+						/>
+					</div>
+					<div>
+						<label for="create-promotion-type" class="theme-label">Type</label>
+						<select id="create-promotion-type" name="type" required class="theme-select">
+							<option
+								value="percentage"
+								selected={form?.action === 'create-promotion'
+									? (form.promotionValues?.type ?? 'percentage') === 'percentage'
+									: true}
+							>
+								Pourcentage
+							</option>
+							<option
+								value="fixed"
+								selected={form?.action === 'create-promotion'
+									? form.promotionValues?.type === 'fixed'
+									: false}
+							>
+								Montant fixe
+							</option>
+						</select>
+					</div>
+					<div>
+						<label for="create-promotion-value" class="theme-label">Valeur</label>
+						<input
+							id="create-promotion-value"
+							name="value"
+							type="number"
+							min="0.01"
+							step="0.01"
+							required
+							value={form?.action === 'create-promotion' ? (form.promotionValues?.value ?? '') : ''}
+							class="theme-input"
+						/>
+					</div>
+				</div>
+
+				<div>
+					<label for="create-promotion-description" class="theme-label">Description</label>
+					<textarea
+						id="create-promotion-description"
+						name="description"
+						rows="4"
+						class="theme-textarea"
+						>{form?.action === 'create-promotion'
+							? (form.promotionValues?.description ?? '')
+							: ''}</textarea
+					>
+				</div>
+
+				<div class="promotion-toggle-grid">
+					<label class="checkbox-card">
+						<input
+							type="checkbox"
+							name="is_active"
+							value="true"
+							bind:checked={createPromotionActive}
+						/>
+						<span class="theme-title text-sm font-medium">Promotion active</span>
+					</label>
+					<label class="checkbox-card">
+						<input
+							type="checkbox"
+							name="applies_to_all"
+							value="true"
+							bind:checked={createPromotionGlobal}
+						/>
+						<span class="theme-title text-sm font-medium">Appliquer a tout le catalogue</span>
+					</label>
+				</div>
+
+				<div class="theme-card p-4">
+					<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+						<div>
+							<p class="theme-label">Produits cibles</p>
+							<p class="theme-copy mt-1 text-sm">
+								Selectionne les produits concernes quand la promotion n'est pas globale.
+							</p>
+						</div>
+						<span class="theme-pill">{data.products.length} produits</span>
+					</div>
+
+					<div class="promotion-product-grid mt-4">
+						{#each data.products as product (product.id)}
+							<label class="promotion-product-card" class:disabled={createPromotionGlobal}>
+								<input
+									type="checkbox"
+									name="product_ids"
+									value={product.id}
+									checked={form?.action === 'create-promotion'
+										? (form.promotionValues?.productIds ?? []).includes(String(product.id))
+										: false}
+									disabled={createPromotionGlobal}
+								/>
+								<div>
+									<p class="theme-title text-sm font-bold">{product.name}</p>
+									<p class="theme-copy mt-1 text-xs">{product.category}</p>
+									<div class="mt-2">
+										<ProductPrice {product} size="sm" showPromotionName={false} />
+									</div>
+								</div>
+							</label>
+						{/each}
+					</div>
+				</div>
+
+				<div class="modal-actions">
+					<button
+						type="button"
+						class="theme-button theme-button-secondary"
+						onclick={() => (isCreatePromotionModalOpen = false)}
+					>
+						Annuler
+					</button>
+					<button type="submit" class="theme-button theme-button-primary">Valider</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
+
+{#if isEditPromotionModalOpen}
+	<div class="theme-overlay fixed inset-0 z-40 flex items-center justify-center px-4 py-8">
+		<div class="theme-modal w-full max-w-3xl p-8">
+			<div class="modal-header">
+				<div>
+					<p class="theme-kicker">Edition promotion</p>
+					<h2 class="theme-title mt-3 text-2xl font-black">Modifier une promotion</h2>
+					<p class="theme-copy mt-2 text-sm">
+						Ajuste la portee, le type de remise et les produits cibles si besoin.
+					</p>
+				</div>
+				<button
+					type="button"
+					class="theme-icon-button theme-close"
+					onclick={closePromotionEditModal}
+				>
+					X
+				</button>
+			</div>
+
+			<form method="POST" action="?/updatePromotion" class="mt-6 space-y-4">
+				<input
+					type="hidden"
+					name="id"
+					value={form?.action === 'edit-promotion'
+						? (form.promotionValues?.id ?? selectedPromotion?.id ?? '')
+						: (selectedPromotion?.id ?? '')}
+				/>
+				<div class="promotion-form-grid">
+					<div>
+						<label for="edit-promotion-name" class="theme-label">Nom</label>
+						<input
+							id="edit-promotion-name"
+							name="name"
+							type="text"
+							required
+							value={form?.action === 'edit-promotion'
+								? (form.promotionValues?.name ?? selectedPromotion?.name ?? '')
+								: (selectedPromotion?.name ?? '')}
+							class="theme-input"
+						/>
+					</div>
+					<div>
+						<label for="edit-promotion-type" class="theme-label">Type</label>
+						<select id="edit-promotion-type" name="type" required class="theme-select">
+							<option
+								value="percentage"
+								selected={form?.action === 'edit-promotion'
+									? (form.promotionValues?.type ?? selectedPromotion?.type ?? 'percentage') ===
+										'percentage'
+									: selectedPromotion?.type === 'percentage'}
+							>
+								Pourcentage
+							</option>
+							<option
+								value="fixed"
+								selected={form?.action === 'edit-promotion'
+									? (form.promotionValues?.type ?? selectedPromotion?.type ?? 'percentage') ===
+										'fixed'
+									: selectedPromotion?.type === 'fixed'}
+							>
+								Montant fixe
+							</option>
+						</select>
+					</div>
+					<div>
+						<label for="edit-promotion-value" class="theme-label">Valeur</label>
+						<input
+							id="edit-promotion-value"
+							name="value"
+							type="number"
+							min="0.01"
+							step="0.01"
+							required
+							value={form?.action === 'edit-promotion'
+								? (form.promotionValues?.value ?? String(selectedPromotion?.value ?? ''))
+								: String(selectedPromotion?.value ?? '')}
+							class="theme-input"
+						/>
+					</div>
+				</div>
+
+				<div>
+					<label for="edit-promotion-description" class="theme-label">Description</label>
+					<textarea
+						id="edit-promotion-description"
+						name="description"
+						rows="4"
+						class="theme-textarea"
+						>{form?.action === 'edit-promotion'
+							? (form.promotionValues?.description ?? selectedPromotion?.description ?? '')
+							: (selectedPromotion?.description ?? '')}</textarea
+					>
+				</div>
+
+				<div class="promotion-toggle-grid">
+					<label class="checkbox-card">
+						<input
+							type="checkbox"
+							name="is_active"
+							value="true"
+							bind:checked={editPromotionActive}
+						/>
+						<span class="theme-title text-sm font-medium">Promotion active</span>
+					</label>
+					<label class="checkbox-card">
+						<input
+							type="checkbox"
+							name="applies_to_all"
+							value="true"
+							bind:checked={editPromotionGlobal}
+						/>
+						<span class="theme-title text-sm font-medium">Appliquer a tout le catalogue</span>
+					</label>
+				</div>
+
+				<div class="theme-card p-4">
+					<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+						<div>
+							<p class="theme-label">Produits cibles</p>
+							<p class="theme-copy mt-1 text-sm">
+								La selection est ignoree quand la promotion est globale.
+							</p>
+						</div>
+						<span class="theme-pill">{selectedPromotion?.productCount ?? 0} cible(s)</span>
+					</div>
+
+					<div class="promotion-product-grid mt-4">
+						{#each data.products as product (product.id)}
+							<label class="promotion-product-card" class:disabled={editPromotionGlobal}>
+								<input
+									type="checkbox"
+									name="product_ids"
+									value={product.id}
+									checked={form?.action === 'edit-promotion'
+										? (form.promotionValues?.productIds ?? []).includes(String(product.id))
+										: (selectedPromotion?.productIds ?? []).includes(product.id)}
+									disabled={editPromotionGlobal}
+								/>
+								<div>
+									<p class="theme-title text-sm font-bold">{product.name}</p>
+									<p class="theme-copy mt-1 text-xs">{product.category}</p>
+									<div class="mt-2">
+										<ProductPrice {product} size="sm" showPromotionName={false} />
+									</div>
+								</div>
+							</label>
+						{/each}
+					</div>
+				</div>
+
+				<div class="modal-actions">
+					<button
+						type="button"
+						class="theme-button theme-button-secondary"
+						onclick={closePromotionEditModal}
+					>
+						Annuler
+					</button>
+					<button type="submit" class="theme-button theme-button-primary">Enregistrer</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
+
+{#if isDeletePromotionModalOpen && selectedPromotion}
+	<div class="theme-overlay fixed inset-0 z-40 flex items-center justify-center px-4 py-8">
+		<div class="theme-modal w-full max-w-md p-8">
+			<div class="modal-header">
+				<div>
+					<p class="theme-kicker">Suppression</p>
+					<h2 class="theme-title mt-3 text-2xl font-black">Supprimer la promotion</h2>
+					<p class="theme-copy mt-2 text-sm">
+						La remise ne sera plus appliquee aux produits concernes.
+					</p>
+				</div>
+				<button
+					type="button"
+					class="theme-icon-button theme-close"
+					onclick={closePromotionDeleteModal}
+				>
+					X
+				</button>
+			</div>
+
+			<div class="danger-card mt-6">
+				<p class="theme-title font-bold">{selectedPromotion.name}</p>
+				<p class="theme-copy mt-2 text-sm">
+					{selectedPromotion.description || 'Aucune description'}
+				</p>
+				<p class="theme-copy mt-3 text-sm">{formatPromotionScope(selectedPromotion)}</p>
+				<p class="theme-title mt-4 font-semibold">{formatPromotionValue(selectedPromotion)}</p>
+			</div>
+
+			<form method="POST" action="?/deletePromotion" class="modal-actions mt-6">
+				<input type="hidden" name="id" value={selectedPromotion.id} />
+				<button
+					type="button"
+					class="theme-button theme-button-secondary"
+					onclick={closePromotionDeleteModal}
+				>
+					Annuler
+				</button>
+				<button type="submit" class="theme-button theme-button-contrast">
+					Confirmer la suppression
+				</button>
+			</form>
+		</div>
+	</div>
+{/if}
+
 <style>
 	.admin-tabs {
 		display: grid;
@@ -1006,16 +1453,6 @@
 		font-size: 0.88rem;
 	}
 
-	.insight-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		border-radius: 1.2rem;
-		background: rgb(var(--color-white-rgb) / 0.78);
-		padding: 0.9rem 1rem;
-	}
-
 	.modal-header {
 		display: flex;
 		align-items: flex-start;
@@ -1034,6 +1471,43 @@
 	.image-preview-card {
 		display: grid;
 		gap: 1rem;
+	}
+
+	.promotion-form-grid {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.promotion-toggle-grid {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.promotion-product-grid {
+		display: grid;
+		gap: 0.85rem;
+		max-height: 20rem;
+		overflow: auto;
+	}
+
+	.promotion-product-card {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: start;
+		gap: 0.85rem;
+		border-radius: 1rem;
+		border: 1px solid var(--color-border);
+		background: rgb(var(--color-white-rgb) / 0.78);
+		padding: 0.9rem 1rem;
+	}
+
+	.promotion-product-card.disabled {
+		opacity: 0.55;
+	}
+
+	.promotion-product-card input {
+		margin-top: 0.2rem;
+		accent-color: var(--color-primary);
 	}
 
 	.checkbox-card {
@@ -1063,12 +1537,24 @@
 
 	@media (min-width: 640px) {
 		.admin-tabs {
-			grid-template-columns: repeat(3, minmax(0, 1fr));
+			grid-template-columns: repeat(4, minmax(0, 1fr));
 		}
 
 		.image-preview-card {
 			grid-template-columns: 120px minmax(0, 1fr);
 			align-items: start;
+		}
+
+		.promotion-form-grid {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+
+		.promotion-toggle-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.promotion-product-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
 </style>

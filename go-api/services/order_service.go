@@ -1,0 +1,313 @@
+package services
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"poc-gin/models"
+	"poc-gin/pkg/constants"
+
+	"gorm.io/gorm"
+)
+
+const orderCurrencyEUR = "EUR"
+
+var (
+	ErrOrderEmpty                      = errors.New("order requires at least one item")
+	ErrOrderInvalidQuantity            = errors.New("order item quantity must be positive")
+	ErrOrderProductNotFound            = errors.New("order product not found")
+	ErrOrderInvalidStatus              = errors.New("order status is invalid")
+	ErrOrderStatusTransitionNotAllowed = errors.New("order status transition is not allowed")
+	ErrOrderDeletionNotAllowed         = errors.New("order deletion is not allowed")
+)
+
+type OrderItemInput struct {
+	ProductID uint
+	Quantity  int
+}
+
+type OrderServiceInterface interface {
+	CreateOrder(ctx context.Context, userID uint, items []OrderItemInput) (*models.Order, error)
+	GetOrdersForUser(ctx context.Context, userID uint) ([]*models.Order, error)
+	GetOrderByID(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error)
+	UpdateOrderStatus(ctx context.Context, actorID, orderID uint, actorRole, status string) (*models.Order, error)
+	DeleteOrder(ctx context.Context, actorID, orderID uint, actorRole string) error
+}
+
+type OrderService struct {
+	db *gorm.DB
+}
+
+func NewOrderService(db *gorm.DB) *OrderService {
+	return &OrderService{db: db}
+}
+
+func (s *OrderService) CreateOrder(ctx context.Context, userID uint, items []OrderItemInput) (*models.Order, error) {
+	ctx, cancel := withDBTimeout(ctx)
+	defer cancel()
+
+	normalizedItems, err := normalizeOrderItems(items)
+	if err != nil {
+		return nil, err
+	}
+
+	var createdOrder models.Order
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		productIDs := make([]uint, 0, len(normalizedItems))
+		for _, item := range normalizedItems {
+			productIDs = append(productIDs, item.ProductID)
+		}
+
+		var products []models.Product
+		if err := tx.Preload("Category").Preload("Promotions").Where("id IN ?", productIDs).Find(&products).Error; err != nil {
+			return fmt.Errorf("failed to fetch order products: %w", err)
+		}
+
+		if len(products) != len(productIDs) {
+			return ErrOrderProductNotFound
+		}
+
+		productPointers := make([]*models.Product, 0, len(products))
+		productByID := make(map[uint]*models.Product, len(products))
+		for i := range products {
+			product := &products[i]
+			productPointers = append(productPointers, product)
+			productByID[product.ID] = product
+		}
+
+		if err := applyCurrentPricing(ctx, tx, productPointers); err != nil {
+			return err
+		}
+
+		order := models.Order{
+			UserID:        userID,
+			Status:        models.OrderStatusAwaitingPayment,
+			Currency:      orderCurrencyEUR,
+			PaymentStatus: models.OrderPaymentStatusPending,
+		}
+
+		for _, item := range normalizedItems {
+			product, ok := productByID[item.ProductID]
+			if !ok {
+				return ErrOrderProductNotFound
+			}
+
+			basePrice := roundCurrency(product.Price)
+			unitPrice := roundCurrency(product.EffectivePrice)
+			unitDiscount := roundCurrency(basePrice - unitPrice)
+			if unitDiscount < 0 {
+				unitDiscount = 0
+			}
+
+			lineBaseTotal := roundCurrency(basePrice * float64(item.Quantity))
+			lineTotal := roundCurrency(unitPrice * float64(item.Quantity))
+			lineDiscountTotal := roundCurrency(lineBaseTotal - lineTotal)
+			if lineDiscountTotal < 0 {
+				lineDiscountTotal = 0
+			}
+
+			orderItem := models.OrderItem{
+				ProductID:          product.ID,
+				ProductName:        product.Name,
+				ProductDescription: product.Description,
+				ProductImage:       product.Image,
+				CategoryName:       product.Category.Name,
+				Quantity:           item.Quantity,
+				UnitBasePrice:      basePrice,
+				UnitPrice:          unitPrice,
+				UnitDiscount:       unitDiscount,
+				LineBaseTotal:      lineBaseTotal,
+				LineDiscountTotal:  lineDiscountTotal,
+				LineTotal:          lineTotal,
+			}
+
+			if product.AppliedPromotion != nil {
+				promotionID := product.AppliedPromotion.ID
+				orderItem.PromotionID = &promotionID
+				orderItem.PromotionName = product.AppliedPromotion.Name
+				orderItem.PromotionType = product.AppliedPromotion.Type
+				orderItem.PromotionValue = product.AppliedPromotion.Value
+				orderItem.PromotionAppliesAll = product.AppliedPromotion.AppliesToAll
+			}
+
+			order.Items = append(order.Items, orderItem)
+			order.ItemCount += item.Quantity
+			order.Subtotal = roundCurrency(order.Subtotal + lineBaseTotal)
+			order.Total = roundCurrency(order.Total + lineTotal)
+			order.DiscountTotal = roundCurrency(order.DiscountTotal + lineDiscountTotal)
+		}
+
+		if err := tx.Create(&order).Error; err != nil {
+			return fmt.Errorf("failed to create order: %w", err)
+		}
+
+		reloadedOrder, err := preloadOrder(tx.WithContext(ctx), order.ID)
+		if err != nil {
+			return err
+		}
+
+		createdOrder = *reloadedOrder
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &createdOrder, nil
+}
+
+func (s *OrderService) GetOrdersForUser(ctx context.Context, userID uint) ([]*models.Order, error) {
+	ctx, cancel := withDBTimeout(ctx)
+	defer cancel()
+
+	var orders []*models.Order
+	query := s.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Preload("Items", func(db *gorm.DB) *gorm.DB {
+			return db.Order("id ASC")
+		})
+
+	if err := query.Find(&orders).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch orders: %w", err)
+	}
+
+	return orders, nil
+}
+
+func (s *OrderService) GetOrderByID(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error) {
+	ctx, cancel := withDBTimeout(ctx)
+	defer cancel()
+
+	return s.findAccessibleOrder(ctx, actorID, orderID, actorRole)
+}
+
+func (s *OrderService) UpdateOrderStatus(ctx context.Context, actorID, orderID uint, actorRole, status string) (*models.Order, error) {
+	ctx, cancel := withDBTimeout(ctx)
+	defer cancel()
+
+	if !models.IsValidOrderStatus(status) {
+		return nil, ErrOrderInvalidStatus
+	}
+
+	order, err := s.findAccessibleOrder(ctx, actorID, orderID, actorRole)
+	if err != nil {
+		return nil, err
+	}
+
+	if !canUpdateOrderStatus(actorRole, order.Status, status) {
+		return nil, ErrOrderStatusTransitionNotAllowed
+	}
+
+	if order.Status != status {
+		if err := s.db.WithContext(ctx).Model(order).Update("status", status).Error; err != nil {
+			return nil, fmt.Errorf("failed to update order status: %w", err)
+		}
+	}
+
+	return s.findAccessibleOrder(ctx, actorID, orderID, actorRole)
+}
+
+func (s *OrderService) DeleteOrder(ctx context.Context, actorID, orderID uint, actorRole string) error {
+	ctx, cancel := withDBTimeout(ctx)
+	defer cancel()
+
+	order, err := s.findAccessibleOrder(ctx, actorID, orderID, actorRole)
+	if err != nil {
+		return err
+	}
+
+	if actorRole != constants.RoleAdmin && order.Status != models.OrderStatusAwaitingPayment {
+		return ErrOrderDeletionNotAllowed
+	}
+
+	if err := s.db.WithContext(ctx).Where("order_id = ?", order.ID).Delete(&models.OrderItem{}).Error; err != nil {
+		return fmt.Errorf("failed to delete order items: %w", err)
+	}
+
+	if err := s.db.WithContext(ctx).Delete(&models.Order{}, order.ID).Error; err != nil {
+		return fmt.Errorf("failed to delete order: %w", err)
+	}
+
+	return nil
+}
+
+func (s *OrderService) findAccessibleOrder(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error) {
+	query := s.db.WithContext(ctx).Model(&models.Order{})
+	if actorRole != constants.RoleAdmin {
+		query = query.Where("user_id = ?", actorID)
+	}
+
+	return preloadOrder(query, orderID)
+}
+
+func preloadOrder(query *gorm.DB, orderID uint) (*models.Order, error) {
+	var order models.Order
+	if err := query.
+		Preload("Items", func(db *gorm.DB) *gorm.DB {
+			return db.Order("id ASC")
+		}).
+		First(&order, orderID).Error; err != nil {
+		return nil, err
+	}
+
+	return &order, nil
+}
+
+func normalizeOrderItems(items []OrderItemInput) ([]OrderItemInput, error) {
+	if len(items) == 0 {
+		return nil, ErrOrderEmpty
+	}
+
+	quantitiesByProduct := make(map[uint]int, len(items))
+	productOrder := make([]uint, 0, len(items))
+
+	for _, item := range items {
+		if item.ProductID == 0 {
+			return nil, ErrOrderProductNotFound
+		}
+		if item.Quantity <= 0 {
+			return nil, ErrOrderInvalidQuantity
+		}
+
+		if _, exists := quantitiesByProduct[item.ProductID]; !exists {
+			productOrder = append(productOrder, item.ProductID)
+		}
+		quantitiesByProduct[item.ProductID] += item.Quantity
+	}
+
+	normalized := make([]OrderItemInput, 0, len(productOrder))
+	for _, productID := range productOrder {
+		normalized = append(normalized, OrderItemInput{
+			ProductID: productID,
+			Quantity:  quantitiesByProduct[productID],
+		})
+	}
+
+	return normalized, nil
+}
+
+func canUpdateOrderStatus(actorRole, currentStatus, nextStatus string) bool {
+	if !models.IsValidOrderStatus(nextStatus) {
+		return false
+	}
+
+	if currentStatus == nextStatus {
+		return true
+	}
+
+	if actorRole != constants.RoleAdmin {
+		return false
+	}
+
+	switch currentStatus {
+	case models.OrderStatusAwaitingPayment:
+		return nextStatus == models.OrderStatusPreparation || nextStatus == models.OrderStatusCancelled
+	case models.OrderStatusPreparation:
+		return nextStatus == models.OrderStatusShipping || nextStatus == models.OrderStatusCancelled
+	case models.OrderStatusShipping:
+		return nextStatus == models.OrderStatusDelivered
+	default:
+		return false
+	}
+}

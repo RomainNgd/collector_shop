@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import ProductPrice from '$lib/components/ProductPrice.svelte';
+	import { getPromotionBadgeLabel } from '$lib/promotions';
 	import { addToCart } from '$lib/stores/cart';
 	import type { Product } from '$lib/types';
 	import { onDestroy } from 'svelte';
@@ -26,12 +28,17 @@
 			clearTimeout(timeoutId);
 		}
 	});
+
+	const promotionBadgeLabel = $derived(getPromotionBadgeLabel(product.promotion));
 </script>
 
 <article class="product-card theme-card theme-hover-lift p-4">
 	<a href={resolve('/produit/[id]', { id: String(product.id) })} class="block">
 		<div class="media-wrap">
 			<span class="theme-pill product-category">{product.category}</span>
+			{#if promotionBadgeLabel}
+				<span class="promotion-badge">{promotionBadgeLabel}</span>
+			{/if}
 			<img
 				src={product.imageUrl}
 				alt={product.name}
@@ -44,7 +51,7 @@
 			<p class="theme-copy mt-3 line-clamp-2 text-sm">{product.description}</p>
 
 			<div class="mt-5 flex items-end justify-between gap-4">
-				<p class="theme-price text-2xl font-black">{product.price} EUR</p>
+				<ProductPrice {product} />
 				<span class="product-link">Voir le detail</span>
 			</div>
 		</div>
@@ -82,6 +89,22 @@
 		top: 0.9rem;
 		left: 0.9rem;
 		z-index: 2;
+	}
+
+	.promotion-badge {
+		position: absolute;
+		top: 0.9rem;
+		right: 0.9rem;
+		z-index: 2;
+		border-radius: 999px;
+		background: linear-gradient(135deg, #f04444 0%, #c91f37 100%);
+		padding: 0.32rem 0.75rem;
+		font-size: 0.72rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: white;
+		box-shadow: 0 10px 22px rgb(201 31 55 / 0.18);
 	}
 
 	.media {

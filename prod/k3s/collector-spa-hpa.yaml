@@ -15,7 +15,7 @@ spec:
       selectPolicy: Max
       policies:
         - type: Pods
-          value: 2
+          value: 1
           periodSeconds: 15
         - type: Percent
           value: 100

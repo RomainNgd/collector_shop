@@ -18,13 +18,15 @@ func NewAuthHandler(authService services.AuthServiceInterface) *AuthHandler {
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
 		return
 	}
 
-	user, err := h.authService.Register(req.Email, req.Password)
+	user, err := h.authService.Register(ctx, req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, services.ErrEmailAlreadyUsed) {
 			RespondError(c, http.StatusConflict, "EMAIL_ALREADY_USED", "Email already registered", nil)
@@ -43,13 +45,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
 		return
 	}
 
-	token, err := h.authService.Login(req.Email, req.Password)
+	token, err := h.authService.Login(ctx, req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidCredentials) {
 			RespondError(c, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password", nil)

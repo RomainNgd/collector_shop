@@ -72,13 +72,20 @@ func runServer(cfg *config.Config) error {
 
 	categoryService := services.NewCategoryService(db.DB)
 	productService := services.NewProductService(db.DB)
+	promotionService := services.NewPromotionService(db.DB)
 	authService := services.NewAuthService(db.DB, cfg.JWT.Secret)
+	orderService := services.NewOrderService(db.DB)
+	stripeService := services.NewStripeService(&cfg.Stripe)
+	orderPaymentService := services.NewOrderPaymentService(db.DB, stripeService, orderService, cfg.Stripe.CheckoutAllowedOrigins)
 
 	authMiddleware := middlewares.NewAuthMiddleware(cfg.JWT.Secret)
 
 	categoryHandler := controllers.NewCategoryHandler(categoryService)
 	productHandler := controllers.NewProductHandler(productService, categoryService, fileService)
+	promotionHandler := controllers.NewPromotionHandler(promotionService)
 	authHandler := controllers.NewAuthHandler(authService)
+	orderHandler := controllers.NewOrderHandler(orderService, orderPaymentService)
+	paymentHandler := controllers.NewPaymentHandler(orderPaymentService)
 
 	r := gin.Default()
 
@@ -88,6 +95,9 @@ func runServer(cfg *config.Config) error {
 	routes.SetupAuthRoutes(r, authHandler)
 	routes.SetupCategoryRoutes(r, categoryHandler, authMiddleware)
 	routes.SetupProductRoutes(r, productHandler, authMiddleware)
+	routes.SetupPromotionRoutes(r, promotionHandler, authMiddleware)
+	routes.SetupOrderRoutes(r, orderHandler, authMiddleware)
+	routes.SetupPaymentRoutes(r, paymentHandler)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Server.Port),
@@ -149,5 +159,12 @@ func runSeed(cfg *config.Config) error {
 }
 
 func migrateDatabase(db *gorm.DB) error {
-	return db.AutoMigrate(&models.Category{}, &models.Product{}, &models.User{})
+	return db.AutoMigrate(
+		&models.Category{},
+		&models.Product{},
+		&models.Promotion{},
+		&models.User{},
+		&models.Order{},
+		&models.OrderItem{},
+	)
 }

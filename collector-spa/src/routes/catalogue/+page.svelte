@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import ProductPrice from '$lib/components/ProductPrice.svelte';
 	import type { Product } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -7,11 +8,6 @@
 	type SortDirection = 'asc' | 'desc';
 
 	const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
-	const priceFormatter = new Intl.NumberFormat('fr-FR', {
-		style: 'currency',
-		currency: 'EUR'
-	});
-
 	let { data }: { data: PageData } = $props();
 
 	let sortField = $state<SortField>('name');
@@ -36,7 +32,7 @@
 			let comparison = 0;
 
 			if (sortField === 'price') {
-				comparison = left.price - right.price;
+				comparison = getSortablePrice(left) - getSortablePrice(right);
 			} else if (sortField === 'category') {
 				comparison = collator.compare(left.category, right.category);
 			} else {
@@ -69,7 +65,7 @@
 		return sortDirection === 'asc' ? '^' : 'v';
 	};
 
-	const formatPrice = (price: Product['price']) => priceFormatter.format(price);
+	const getSortablePrice = (product: Product) => product.price;
 </script>
 
 <section class="catalogue-page space-y-6">
@@ -171,7 +167,7 @@
 									<span class="theme-pill">{product.category}</span>
 								</td>
 								<td class="price-cell">
-									<p class="theme-price text-lg font-black">{formatPrice(product.price)}</p>
+									<ProductPrice {product} size="sm" align="end" />
 								</td>
 								<td>
 									<a

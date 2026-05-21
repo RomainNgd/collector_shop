@@ -50,6 +50,9 @@
 				<nav class="hidden items-center gap-3 md:flex">
 					<a href={resolve('/')} class="nav-link">Accueil</a>
 					<a href={resolve('/catalogue')} class="nav-link">Catalogue</a>
+					{#if data.user}
+						<a href={resolve('/mes-commandes')} class="nav-link">Mes commandes</a>
+					{/if}
 					{#if data.user?.role === ADMIN_ROLE}
 						<a href={resolve('/administration')} class="nav-link">Administration</a>
 					{/if}

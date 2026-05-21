@@ -41,6 +41,11 @@ spec:
                 configMapKeyRef:
                   name: collector-shop-config
                   key: API_PUBLIC_BASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: collector-shop-secrets
+                  key: JWT_SECRET
           resources:
             requests:
               cpu: 100m

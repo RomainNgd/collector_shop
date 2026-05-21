@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"poc-gin/models"
@@ -16,7 +17,7 @@ func TestAuthServiceRegister(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewAuthService(tx, "test-secret")
 
-	user, err := service.Register(fmt.Sprintf("user-%d@example.com", time.Now().UnixNano()), "password123")
+	user, err := service.Register(context.Background(), fmt.Sprintf("user-%d@example.com", time.Now().UnixNano()), "password123")
 	if err != nil {
 		t.Fatalf("expected register success, got %v", err)
 	}
@@ -36,18 +37,14 @@ func TestAuthServiceRegisterDuplicateEmail(t *testing.T) {
 	service := NewAuthService(tx, "test-secret")
 	email := fmt.Sprintf("dup-%d@example.com", time.Now().UnixNano())
 
-	if _, err := service.Register(email, "password123"); err != nil {
+	if _, err := service.Register(context.Background(), email, "password123"); err != nil {
 		t.Fatalf("expected initial register success, got %v", err)
 	}
 
-	_, err := service.Register(email, "password123")
-	if err == nil {
-		t.Fatal("expected duplicate register error")
+	_, err := service.Register(context.Background(), email, "password123")
+	if !errors.Is(err, ErrEmailAlreadyUsed) {
+		t.Fatalf("expected ErrEmailAlreadyUsed, got %v", err)
 	}
-	if errors.Is(err, ErrEmailAlreadyUsed) {
-		return
-	}
-	t.Skipf("duplicate key is not translated by current gorm/postgres setup: %v", err)
 }
 
 func TestAuthServiceLogin(t *testing.T) {
@@ -55,26 +52,26 @@ func TestAuthServiceLogin(t *testing.T) {
 	service := NewAuthService(tx, "test-secret")
 	email := fmt.Sprintf("login-%d@example.com", time.Now().UnixNano())
 
-	if _, err := service.Register(email, "password123"); err != nil {
+	if _, err := service.Register(context.Background(), email, "password123"); err != nil {
 		t.Fatalf("expected register success, got %v", err)
 	}
 
 	t.Run("returns invalid credentials when user is missing", func(t *testing.T) {
-		_, err := service.Login("missing@example.com", "password123")
+		_, err := service.Login(context.Background(), "missing@example.com", "password123")
 		if !errors.Is(err, ErrInvalidCredentials) {
 			t.Fatalf("expected ErrInvalidCredentials, got %v", err)
 		}
 	})
 
 	t.Run("returns invalid credentials on wrong password", func(t *testing.T) {
-		_, err := service.Login(email, "wrong-password")
+		_, err := service.Login(context.Background(), email, "wrong-password")
 		if !errors.Is(err, ErrInvalidCredentials) {
 			t.Fatalf("expected ErrInvalidCredentials, got %v", err)
 		}
 	})
 
 	t.Run("returns signed token on success", func(t *testing.T) {
-		tokenString, err := service.Login(email, "password123")
+		tokenString, err := service.Login(context.Background(), email, "password123")
 		if err != nil {
 			t.Fatalf("expected login success, got %v", err)
 		}
@@ -110,7 +107,7 @@ func TestAuthServiceLoginDatabaseError(t *testing.T) {
 		t.Fatalf("failed to drop users table: %v", err)
 	}
 
-	_, err := service.Login("john@example.com", "password123")
+	_, err := service.Login(context.Background(), "john@example.com", "password123")
 	if err == nil {
 		t.Fatal("expected database error")
 	}
@@ -121,7 +118,7 @@ func TestAuthServiceRegisterPersistsUserFields(t *testing.T) {
 	service := NewAuthService(tx, "test-secret")
 	email := fmt.Sprintf("persist-%d@example.com", time.Now().UnixNano())
 
-	user, err := service.Register(email, "password123")
+	user, err := service.Register(context.Background(), email, "password123")
 	if err != nil {
 		t.Fatalf("expected register success, got %v", err)
 	}

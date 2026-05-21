@@ -316,6 +316,36 @@ textarea:disabled {
 	border-color: rgb(var(--color-black-rgb) / 0.12);
 }
 
+.status-pill-awaiting-payment {
+	background: rgb(var(--color-secondary-rgb) / 0.22);
+	border-color: rgb(var(--color-secondary-rgb) / 0.28);
+	color: var(--color-primary);
+}
+
+.status-pill-preparation {
+	background: rgb(246 196 89 / 0.2);
+	border-color: rgb(246 196 89 / 0.34);
+	color: #7a4c00;
+}
+
+.status-pill-shipping {
+	background: rgb(114 168 255 / 0.18);
+	border-color: rgb(114 168 255 / 0.3);
+	color: #143d7a;
+}
+
+.status-pill-delivered {
+	background: rgb(78 184 112 / 0.18);
+	border-color: rgb(78 184 112 / 0.3);
+	color: #0f5a2f;
+}
+
+.status-pill-cancelled {
+	background: rgb(214 97 97 / 0.16);
+	border-color: rgb(214 97 97 / 0.28);
+	color: #7a1f1f;
+}
+
 .theme-kicker {
 	font-size: 0.78rem;
 	font-weight: 800;

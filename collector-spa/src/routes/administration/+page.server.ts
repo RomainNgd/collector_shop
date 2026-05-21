@@ -1,19 +1,18 @@
 import {
-	ADMIN_ROLE,
-	mapApiCategory,
-	mapApiProduct,
+	PROMOTION_TYPE_FIXED,
+	PROMOTION_TYPE_PERCENTAGE,
 	type ApiCategory,
 	type ApiProduct,
-	type AuthUser
+	type ApiPromotion
 } from '$lib/types';
 import {
-	API_BASE_URL,
-	API_PUBLIC_BASE_URL,
 	buildApiHeaders,
+	buildInternalApiPath,
 	getApiErrorMessage,
 	readApiResponse
 } from '$lib/server/api';
-import { error, fail, redirect } from '@sveltejs/kit';
+import { loadAdminData, requireAdmin } from '$lib/server/admin';
+import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 type AdminAction =
@@ -22,10 +21,14 @@ type AdminAction =
 	| 'delete-product'
 	| 'create-category'
 	| 'edit-category'
-	| 'delete-category';
+	| 'delete-category'
+	| 'create-promotion'
+	| 'edit-promotion'
+	| 'delete-promotion';
 
 type ProductMutationApiData = ApiProduct | { ID?: number; id?: number } | null;
 type CategoryMutationApiData = ApiCategory | { ID?: number; id?: number } | null;
+type PromotionMutationApiData = ApiPromotion | { ID?: number; id?: number } | null;
 
 type ProductFormValues = {
 	id?: string;
@@ -43,6 +46,17 @@ type CategoryFormValues = {
 	description: string;
 };
 
+type PromotionFormValues = {
+	id?: string;
+	name: string;
+	description: string;
+	type: string;
+	value: string;
+	isActive: 'true' | 'false';
+	appliesToAll: 'true' | 'false';
+	productIds: string[];
+};
+
 type ParsedProductForm = {
 	id: string;
 	values: ProductFormValues;
@@ -51,14 +65,11 @@ type ParsedProductForm = {
 	removeImage: boolean;
 };
 
-const requireAdmin = (user: AuthUser | null) => {
-	if (!user) {
-		redirect(303, '/login');
-	}
-
-	if (user.role !== ADMIN_ROLE) {
-		throw error(403, 'Acces refuse');
-	}
+type ParsedPromotionForm = {
+	id: string;
+	values: PromotionFormValues;
+	value: number;
+	productIds: number[];
 };
 
 const failAdminAction = (
@@ -70,6 +81,8 @@ const failAdminAction = (
 		productId?: string;
 		categoryValues?: CategoryFormValues;
 		categoryId?: string;
+		promotionValues?: PromotionFormValues;
+		promotionId?: string;
 	}
 ) =>
 	fail(status, {
@@ -78,7 +91,9 @@ const failAdminAction = (
 		values: options?.productValues,
 		productId: options?.productId,
 		categoryValues: options?.categoryValues,
-		categoryId: options?.categoryId
+		categoryId: options?.categoryId,
+		promotionValues: options?.promotionValues,
+		promotionId: options?.promotionId
 	});
 
 const getImageFile = (entry: FormDataEntryValue | null): File | null => {
@@ -98,7 +113,7 @@ const validateImageFile = (file: File | null) => {
 };
 
 const extractEntityId = (
-	payload: ProductMutationApiData | CategoryMutationApiData | undefined
+	payload: ProductMutationApiData | CategoryMutationApiData | PromotionMutationApiData | undefined
 ): number | null => {
 	if (!payload || typeof payload !== 'object') {
 		return null;
@@ -159,6 +174,40 @@ const readCategoryForm = async (request: Request) => {
 	};
 };
 
+const readPromotionForm = async (request: Request): Promise<ParsedPromotionForm> => {
+	const formData = await request.formData();
+	const id = String(formData.get('id') ?? '').trim();
+	const name = String(formData.get('name') ?? '').trim();
+	const description = String(formData.get('description') ?? '').trim();
+	const type = String(formData.get('type') ?? '').trim();
+	const valueText = String(formData.get('value') ?? '').trim();
+	const isActive = String(formData.get('is_active') ?? 'false') === 'true' ? 'true' : 'false';
+	const appliesToAll =
+		String(formData.get('applies_to_all') ?? 'false') === 'true' ? 'true' : 'false';
+	const rawProductIds = formData
+		.getAll('product_ids')
+		.map((entry) => String(entry).trim())
+		.filter((entry) => entry !== '');
+
+	return {
+		id,
+		values: {
+			id,
+			name,
+			description,
+			type,
+			value: valueText,
+			isActive,
+			appliesToAll,
+			productIds: rawProductIds
+		},
+		value: Number(valueText),
+		productIds: rawProductIds
+			.map((entry) => Number(entry))
+			.filter((entry) => Number.isInteger(entry) && entry > 0)
+	};
+};
+
 const validateProductForm = (
 	values: ProductFormValues,
 	action: Extract<AdminAction, 'create-product' | 'edit-product'>,
@@ -177,8 +226,8 @@ const validateProductForm = (
 		});
 	}
 
-	if (!Number.isFinite(price) || price < 0) {
-		return failAdminAction(400, action, 'Le prix doit etre un nombre valide', {
+	if (!Number.isFinite(price) || price <= 0) {
+		return failAdminAction(400, action, 'Le prix doit etre un nombre positif', {
 			productValues: values
 		});
 	}
@@ -213,10 +262,53 @@ const validateCategoryForm = (
 	return null;
 };
 
+const validatePromotionForm = (
+	values: PromotionFormValues,
+	action: Extract<AdminAction, 'create-promotion' | 'edit-promotion'>,
+	value: number,
+	productIds: number[]
+) => {
+	if (!values.name || !values.type || values.value === '') {
+		return failAdminAction(400, action, 'Tous les champs promotion sont requis', {
+			promotionValues: values
+		});
+	}
+
+	if (values.type !== PROMOTION_TYPE_PERCENTAGE && values.type !== PROMOTION_TYPE_FIXED) {
+		return failAdminAction(400, action, 'Le type de promotion est invalide', {
+			promotionValues: values
+		});
+	}
+
+	if (!Number.isFinite(value) || value <= 0) {
+		return failAdminAction(400, action, 'La valeur de promotion doit etre positive', {
+			promotionValues: values
+		});
+	}
+
+	if (values.type === PROMOTION_TYPE_PERCENTAGE && value > 100) {
+		return failAdminAction(400, action, 'Le pourcentage ne peut pas depasser 100', {
+			promotionValues: values
+		});
+	}
+
+	if (values.appliesToAll !== 'true' && productIds.length === 0) {
+		return failAdminAction(
+			400,
+			action,
+			'Selectionne au moins un produit ou active la portee globale',
+			{
+				promotionValues: values
+			}
+		);
+	}
+
+	return null;
+};
+
 const uploadProductImage = async (
 	fetchFn: typeof fetch,
 	productId: string | number,
-	token: string | undefined,
 	imageFile: File
 ) => {
 	const uploadBlob = new Blob([await imageFile.arrayBuffer()], {
@@ -225,9 +317,8 @@ const uploadProductImage = async (
 	const imageFormData = new FormData();
 	imageFormData.set('image', uploadBlob, imageFile.name || 'upload-image');
 
-	const response = await fetchFn(`${API_BASE_URL}/products/${productId}/image`, {
+	const response = await fetchFn(buildInternalApiPath(`/products/${productId}/image`), {
 		method: 'POST',
-		headers: buildApiHeaders({ token }),
 		body: imageFormData
 	});
 
@@ -235,82 +326,38 @@ const uploadProductImage = async (
 	return getApiErrorMessage(response, result, "Impossible d'envoyer l'image");
 };
 
-const deleteProductImage = async (
-	fetchFn: typeof fetch,
-	productId: string | number,
-	token: string | undefined
-) => {
-	const response = await fetchFn(`${API_BASE_URL}/products/${productId}/image`, {
-		method: 'DELETE',
-		headers: buildApiHeaders({ token })
+const deleteProductImage = async (fetchFn: typeof fetch, productId: string | number) => {
+	const response = await fetchFn(buildInternalApiPath(`/products/${productId}/image`), {
+		method: 'DELETE'
 	});
 
 	const result = await readApiResponse<unknown>(response);
 	return getApiErrorMessage(response, result, "Impossible de supprimer l'image");
 };
 
-const loadProducts = async (fetchFn: typeof fetch) => {
-	const response = await fetchFn(`${API_BASE_URL}/products`);
-
-	if (!response.ok) {
-		throw error(response.status, 'Impossible de charger les produits');
-	}
-
-	const result = await readApiResponse<ApiProduct[]>(response);
-
-	if (!Array.isArray(result.payload?.data)) {
-		throw error(502, 'Format de reponse API invalide pour les produits');
-	}
-
-	return result.payload.data.map((item) => mapApiProduct(item, API_PUBLIC_BASE_URL));
-};
-
-const loadCategories = async (fetchFn: typeof fetch) => {
-	const response = await fetchFn(`${API_BASE_URL}/categories`);
-
-	if (!response.ok) {
-		throw error(response.status, 'Impossible de charger les categories');
-	}
-
-	const result = await readApiResponse<ApiCategory[]>(response);
-
-	if (!Array.isArray(result.payload?.data)) {
-		throw error(502, 'Format de reponse API invalide pour les categories');
-	}
-
-	return result.payload.data.map(mapApiCategory);
-};
-
 export const load: PageServerLoad = async ({ locals, fetch }) => {
 	requireAdmin(locals.user);
 
-	const [products, categories] = await Promise.all([loadProducts(fetch), loadCategories(fetch)]);
-
-	return {
-		products,
-		categories
-	};
+	return loadAdminData(fetch);
 };
 
 export const actions: Actions = {
-	createProduct: async ({ request, fetch, cookies, locals }) => {
+	createProduct: async ({ request, fetch, locals }) => {
 		requireAdmin(locals.user);
 
-		const token = cookies.get('auth_token');
 		const { values, price, imageFile } = await readProductForm(request);
 		const validationError = validateProductForm(values, 'create-product', price, imageFile);
 		if (validationError) {
 			return validationError;
 		}
 
-		const response = await fetch(`${API_BASE_URL}/products`, {
+		const response = await fetch(buildInternalApiPath('/products'), {
 			method: 'POST',
-			headers: buildApiHeaders({ token, contentType: 'application/json' }),
+			headers: buildApiHeaders({ contentType: 'application/json' }),
 			body: JSON.stringify({
 				name: values.name,
 				price,
 				description: values.description,
-				image: 'truc.jpg',
 				category_id: Number(values.categoryId)
 			})
 		});
@@ -334,7 +381,7 @@ export const actions: Actions = {
 				);
 			}
 
-			const imageError = await uploadProductImage(fetch, createdProductId, token, imageFile);
+			const imageError = await uploadProductImage(fetch, createdProductId, imageFile);
 			if (imageError) {
 				return failAdminAction(
 					500,
@@ -351,10 +398,9 @@ export const actions: Actions = {
 		};
 	},
 
-	updateProduct: async ({ request, fetch, cookies, locals }) => {
+	updateProduct: async ({ request, fetch, locals }) => {
 		requireAdmin(locals.user);
 
-		const token = cookies.get('auth_token');
 		const { id, values, price, imageFile, removeImage } = await readProductForm(request);
 
 		if (!id) {
@@ -368,9 +414,9 @@ export const actions: Actions = {
 			return validationError;
 		}
 
-		const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+		const response = await fetch(buildInternalApiPath(`/products/${id}`), {
 			method: 'PUT',
-			headers: buildApiHeaders({ token, contentType: 'application/json' }),
+			headers: buildApiHeaders({ contentType: 'application/json' }),
 			body: JSON.stringify({
 				name: values.name,
 				price,
@@ -389,7 +435,7 @@ export const actions: Actions = {
 		}
 
 		if (removeImage && !imageFile) {
-			const imageDeleteError = await deleteProductImage(fetch, id, token);
+			const imageDeleteError = await deleteProductImage(fetch, id);
 			if (imageDeleteError) {
 				return failAdminAction(
 					500,
@@ -401,7 +447,7 @@ export const actions: Actions = {
 		}
 
 		if (imageFile) {
-			const imageUploadError = await uploadProductImage(fetch, id, token, imageFile);
+			const imageUploadError = await uploadProductImage(fetch, id, imageFile);
 			if (imageUploadError) {
 				return failAdminAction(
 					500,
@@ -421,7 +467,7 @@ export const actions: Actions = {
 		};
 	},
 
-	deleteProduct: async ({ request, fetch, cookies, locals }) => {
+	deleteProduct: async ({ request, fetch, locals }) => {
 		requireAdmin(locals.user);
 
 		const productId = String((await request.formData()).get('id') ?? '').trim();
@@ -432,9 +478,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
-			method: 'DELETE',
-			headers: buildApiHeaders({ token: cookies.get('auth_token') })
+		const response = await fetch(buildInternalApiPath(`/products/${productId}`), {
+			method: 'DELETE'
 		});
 
 		const result = await readApiResponse<ProductMutationApiData>(response);
@@ -451,19 +496,18 @@ export const actions: Actions = {
 		};
 	},
 
-	createCategory: async ({ request, fetch, cookies, locals }) => {
+	createCategory: async ({ request, fetch, locals }) => {
 		requireAdmin(locals.user);
 
-		const token = cookies.get('auth_token');
 		const { values } = await readCategoryForm(request);
 		const validationError = validateCategoryForm(values, 'create-category');
 		if (validationError) {
 			return validationError;
 		}
 
-		const response = await fetch(`${API_BASE_URL}/categories`, {
+		const response = await fetch(buildInternalApiPath('/categories'), {
 			method: 'POST',
-			headers: buildApiHeaders({ token, contentType: 'application/json' }),
+			headers: buildApiHeaders({ contentType: 'application/json' }),
 			body: JSON.stringify({
 				name: values.name,
 				description: values.description
@@ -484,10 +528,9 @@ export const actions: Actions = {
 		};
 	},
 
-	updateCategory: async ({ request, fetch, cookies, locals }) => {
+	updateCategory: async ({ request, fetch, locals }) => {
 		requireAdmin(locals.user);
 
-		const token = cookies.get('auth_token');
 		const { id, values } = await readCategoryForm(request);
 		if (!id) {
 			return failAdminAction(400, 'edit-category', 'Categorie introuvable', {
@@ -500,9 +543,9 @@ export const actions: Actions = {
 			return validationError;
 		}
 
-		const response = await fetch(`${API_BASE_URL}/categories/${id}`, {
+		const response = await fetch(buildInternalApiPath(`/categories/${id}`), {
 			method: 'PUT',
-			headers: buildApiHeaders({ token, contentType: 'application/json' }),
+			headers: buildApiHeaders({ contentType: 'application/json' }),
 			body: JSON.stringify({
 				name: values.name,
 				description: values.description
@@ -523,7 +566,7 @@ export const actions: Actions = {
 		};
 	},
 
-	deleteCategory: async ({ request, fetch, cookies, locals }) => {
+	deleteCategory: async ({ request, fetch, locals }) => {
 		requireAdmin(locals.user);
 
 		const categoryId = String((await request.formData()).get('id') ?? '').trim();
@@ -533,9 +576,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const response = await fetch(`${API_BASE_URL}/categories/${categoryId}`, {
-			method: 'DELETE',
-			headers: buildApiHeaders({ token: cookies.get('auth_token') })
+		const response = await fetch(buildInternalApiPath(`/categories/${categoryId}`), {
+			method: 'DELETE'
 		});
 
 		const result = await readApiResponse<CategoryMutationApiData>(response);
@@ -549,6 +591,115 @@ export const actions: Actions = {
 		return {
 			action: 'delete-category',
 			success: 'Categorie supprimee avec succes'
+		};
+	},
+
+	createPromotion: async ({ request, fetch, locals }) => {
+		requireAdmin(locals.user);
+
+		const { values, value, productIds } = await readPromotionForm(request);
+		const validationError = validatePromotionForm(values, 'create-promotion', value, productIds);
+		if (validationError) {
+			return validationError;
+		}
+
+		const response = await fetch(buildInternalApiPath('/promotions'), {
+			method: 'POST',
+			headers: buildApiHeaders({ contentType: 'application/json' }),
+			body: JSON.stringify({
+				name: values.name,
+				description: values.description,
+				type: values.type,
+				value,
+				is_active: values.isActive === 'true',
+				applies_to_all: values.appliesToAll === 'true',
+				product_ids: values.appliesToAll === 'true' ? [] : productIds
+			})
+		});
+
+		const result = await readApiResponse<PromotionMutationApiData>(response);
+		const apiError = getApiErrorMessage(response, result, 'Impossible de creer la promotion');
+		if (apiError) {
+			return failAdminAction(response.status || 500, 'create-promotion', apiError, {
+				promotionValues: values
+			});
+		}
+
+		return {
+			action: 'create-promotion',
+			success: 'Promotion ajoutee avec succes'
+		};
+	},
+
+	updatePromotion: async ({ request, fetch, locals }) => {
+		requireAdmin(locals.user);
+
+		const { id, values, value, productIds } = await readPromotionForm(request);
+		if (!id) {
+			return failAdminAction(400, 'edit-promotion', 'Promotion introuvable', {
+				promotionValues: values
+			});
+		}
+
+		const validationError = validatePromotionForm(values, 'edit-promotion', value, productIds);
+		if (validationError) {
+			return validationError;
+		}
+
+		const response = await fetch(buildInternalApiPath(`/promotions/${id}`), {
+			method: 'PUT',
+			headers: buildApiHeaders({ contentType: 'application/json' }),
+			body: JSON.stringify({
+				name: values.name,
+				description: values.description,
+				type: values.type,
+				value,
+				is_active: values.isActive === 'true',
+				applies_to_all: values.appliesToAll === 'true',
+				product_ids: values.appliesToAll === 'true' ? [] : productIds
+			})
+		});
+
+		const result = await readApiResponse<PromotionMutationApiData>(response);
+		const apiError = getApiErrorMessage(response, result, 'Impossible de modifier la promotion');
+		if (apiError) {
+			return failAdminAction(response.status || 500, 'edit-promotion', apiError, {
+				promotionValues: values,
+				promotionId: id
+			});
+		}
+
+		return {
+			action: 'edit-promotion',
+			success: 'Promotion modifiee avec succes'
+		};
+	},
+
+	deletePromotion: async ({ request, fetch, locals }) => {
+		requireAdmin(locals.user);
+
+		const promotionId = String((await request.formData()).get('id') ?? '').trim();
+		if (!promotionId) {
+			return failAdminAction(400, 'delete-promotion', 'Promotion introuvable', {
+				promotionId
+			});
+		}
+
+		const response = await fetch(buildInternalApiPath(`/promotions/${promotionId}`), {
+			method: 'DELETE'
+		});
+
+		const result = await readApiResponse<PromotionMutationApiData>(response);
+		const apiError = getApiErrorMessage(response, result, 'Impossible de supprimer la promotion');
+		if (apiError) {
+			return failAdminAction(response.status || 500, 'delete-promotion', apiError, {
+				promotionId
+			});
+		}
+
+		return {
+			action: 'delete-promotion',
+			success: 'Promotion supprimee avec succes'
 		};
 	}
 };

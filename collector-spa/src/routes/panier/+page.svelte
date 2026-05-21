@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import ProductPrice from '$lib/components/ProductPrice.svelte';
 	import {
 		cartItems,
 		cartTotal,
@@ -7,6 +8,17 @@
 		removeFromCart,
 		updateQuantity
 	} from '$lib/stores/cart';
+	import type { ActionData, PageData } from './$types';
+
+	let { data, form }: { data: PageData; form: ActionData | null } = $props();
+
+	const getCheckoutPayload = () =>
+		JSON.stringify(
+			$cartItems.map((item) => ({
+				product_id: item.product.id,
+				quantity: item.quantity
+			}))
+		);
 </script>
 
 <section class="space-y-8">
@@ -51,7 +63,9 @@
 							<h2 class="theme-title mt-2 line-clamp-1 text-xl font-black">
 								{item.product.name}
 							</h2>
-							<p class="theme-copy mt-1 text-sm">{item.product.price} EUR unite</p>
+							<div class="mt-2">
+								<ProductPrice product={item.product} size="sm" />
+							</div>
 						</div>
 
 						<div class="quantity-control">
@@ -95,7 +109,10 @@
 			<aside class="theme-panel p-6 md:p-8">
 				<p class="theme-kicker">Recapitulatif</p>
 				<h2 class="theme-title mt-3 text-3xl font-black">Panier pret</h2>
-				<p class="theme-copy mt-3">Consulte ton total et finalise ta selection.</p>
+				<p class="theme-copy mt-3">
+					Le parcours se fait en 2 etapes: creation de la commande pour figer le prix, puis paiement
+					sur le recap.
+				</p>
 
 				<div class="summary-grid mt-8">
 					<div class="summary-row">
@@ -108,10 +125,36 @@
 					</div>
 				</div>
 
+				{#if form?.error}
+					<div class="theme-alert theme-alert-error mt-6">
+						<p class="theme-kicker">Commande</p>
+						<p class="theme-copy mt-2">{form.error}</p>
+					</div>
+				{/if}
+
 				<div class="mt-8 flex flex-col gap-3">
-					<button type="button" class="theme-button theme-button-primary w-full justify-center">
-						Commander
-					</button>
+					{#if data.user}
+						<form method="POST" action="?/createOrder" class="contents">
+							<input type="hidden" name="items" value={getCheckoutPayload()} />
+							<button type="submit" class="theme-button theme-button-primary w-full justify-center">
+								Valider et payer
+							</button>
+						</form>
+						<p class="theme-copy text-sm">
+							Le bouton suivant dans le recap simulera le paiement et passera la commande en
+							preparation.
+						</p>
+					{:else}
+						<a
+							href={resolve('/login')}
+							class="theme-button theme-button-primary w-full justify-center"
+						>
+							Connecte-toi pour commander
+						</a>
+						<p class="theme-copy text-sm">
+							Tu peux garder ton panier, mais il faut etre connecte pour creer une commande.
+						</p>
+					{/if}
 					<button
 						type="button"
 						onclick={clearCart}

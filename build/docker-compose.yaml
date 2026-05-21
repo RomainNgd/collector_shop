@@ -34,6 +34,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-real-env}
       UPLOAD_DIR: /app/upload
       MAX_FILE_SIZE: ${MAX_FILE_SIZE:-5242880}
+      STRIPE_ENABLED: ${STRIPE_ENABLED:-false}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_CHECKOUT_ALLOWED_ORIGINS: ${STRIPE_CHECKOUT_ALLOWED_ORIGINS:-http://localhost:3000}
     volumes:
       - api_uploads:/app/upload
     ports:
@@ -50,6 +54,7 @@ services:
       PORT: 3000
       HOST: 0.0.0.0
       API_BASE_URL: ${API_BASE_URL:-http://go-api:8080}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-real-env}
     ports:
       - "${SPA_EXTERNAL_PORT:-3000}:3000"
     restart: unless-stopped

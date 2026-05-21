@@ -33,4 +33,6 @@ TAG=v0.1.0 REGISTRY=registry.example.com/collector-shop sh ./build/scripts/build
 - Le front SvelteKit est maintenant construit avec `adapter-node` pour produire un runtime Node explicite.
 - L'API Go est construite en multi-stage et embarque uniquement le binaire final.
 - Le dossier d'upload du backend n'est pas integre dans l'image finale comme donnee persistante. Il devra etre monte en volume dans Kubernetes si necessaire.
+- Le runtime `collector-spa` a besoin du meme `JWT_SECRET` que `go-api`, car le SSR verifie maintenant la signature des cookies JWT avant d'exposer l'utilisateur aux pages.
+- Si Stripe est active, configure `STRIPE_CHECKOUT_ALLOWED_ORIGINS` avec les origines front autorisees, separees par des virgules.
 - Ces scripts ne poussent pas les images. Ils se contentent de les construire localement avec un tag propre.

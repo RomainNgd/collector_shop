@@ -43,6 +43,48 @@ func TestValidate(t *testing.T) {
 			t.Fatalf("expected valid config, got %v", err)
 		}
 	})
+
+	t.Run("fails when stripe is enabled without keys", func(t *testing.T) {
+		cfg := &Config{
+			Database: DatabaseConfig{
+				Host:     "127.0.0.1",
+				Port:     "5432",
+				User:     "user",
+				Password: "password",
+				Name:     "db",
+			},
+			JWT: JWTConfig{Secret: "secret"},
+			Stripe: StripeConfig{
+				Enabled: true,
+			},
+		}
+
+		if err := cfg.Validate(); err == nil {
+			t.Fatal("expected stripe validation error")
+		}
+	})
+
+	t.Run("fails when stripe is enabled without allowed checkout origins", func(t *testing.T) {
+		cfg := &Config{
+			Database: DatabaseConfig{
+				Host:     "127.0.0.1",
+				Port:     "5432",
+				User:     "user",
+				Password: "password",
+				Name:     "db",
+			},
+			JWT: JWTConfig{Secret: "secret"},
+			Stripe: StripeConfig{
+				Enabled:       true,
+				SecretKey:     "sk_test_123",
+				WebhookSecret: "whsec_123",
+			},
+		}
+
+		if err := cfg.Validate(); err == nil {
+			t.Fatal("expected stripe checkout origin validation error")
+		}
+	})
 }
 
 func TestGetEnvAsInt64(t *testing.T) {
@@ -68,6 +110,8 @@ func TestLoad(t *testing.T) {
 	keys := []string{
 		"PORT", "DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME",
 		"DB_AUTO_MIGRATE", "JWT_SECRET", "UPLOAD_DIR", "MAX_FILE_SIZE",
+		"STRIPE_ENABLED", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+		"STRIPE_CHECKOUT_ALLOWED_ORIGINS",
 	}
 
 	for _, key := range keys {
@@ -113,5 +157,8 @@ func TestLoad(t *testing.T) {
 	}
 	if !cfg.Database.AutoMigrate {
 		t.Fatal("expected auto migrate to be true")
+	}
+	if cfg.Stripe.Enabled {
+		t.Fatal("expected stripe to be disabled by default")
 	}
 }

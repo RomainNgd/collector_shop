@@ -29,12 +29,19 @@ func openIntegrationDB(t *testing.T) *gorm.DB {
 		testEnv("DB_PORT", "5432"),
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
 	if err != nil {
 		t.Skipf("postgres not available: %v", err)
 	}
 
-	if err := db.AutoMigrate(&models.Category{}, &models.Product{}, &models.User{}); err != nil {
+	if err := db.AutoMigrate(
+		&models.Category{},
+		&models.Product{},
+		&models.Promotion{},
+		&models.User{},
+		&models.Order{},
+		&models.OrderItem{},
+	); err != nil {
 		t.Fatalf("failed to migrate test schema: %v", err)
 	}
 

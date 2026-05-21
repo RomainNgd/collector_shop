@@ -22,7 +22,7 @@ func New(cfg *config.DatabaseConfig) (*Database, error) {
 		cfg.Host, cfg.User, cfg.Password, cfg.Name, cfg.Port,
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
 	if err != nil {
 		return nil, formatConnectionError(cfg, err)
 	}
