@@ -2,6 +2,8 @@
 
 Ce dossier contient une base Kubernetes pour lancer `postgres`, `go-api` et `collector-spa` sur k3s.
 
+Pour l'installation complete du VPS, de k3s, d'Argo CD et de cert-manager, voir [../README.md](../README.md).
+
 ## 1) Prerequis
 
 - Les images de prod sont tirees depuis Docker Hub:
@@ -20,9 +22,9 @@ kubectl create secret docker-registry dockerhub-pull-secret `
   --docker-password='<dockerhub-token>' `
   --dry-run=client -o yaml | kubectl apply -f -
 ```
-- Modifier les secrets dans `secret.yaml`.
+- Creer les secrets dans le cluster avant le deploiement. `secret.example.yaml` sert seulement d'exemple et n'est pas applique par `kustomization.yaml`.
 - `JWT_SECRET` est utilise par l'API et par le front SSR: les deux doivent partager exactement la meme valeur pour verifier les cookies de session.
-- Si Stripe est active, renseigne aussi `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` et garde `STRIPE_CHECKOUT_ALLOWED_ORIGINS` aligne avec l'origine publique du front.
+- Si Stripe est active, renseigne aussi `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` et garde `STRIPE_CHECKOUT_ALLOWED_ORIGINS` aligne avec l'origine publique HTTPS du front.
 - `metrics-server` doit etre installe si tu veux que le `HorizontalPodAutoscaler` fonctionne.
 - Verifie que `kubectl top pods -n collector-shop-prod` repond avant de lancer un test de charge.
 
@@ -48,6 +50,7 @@ Exemple hosts local:
 kubectl apply -k prod/k3s
 kubectl -n collector-shop-prod get pods
 kubectl -n collector-shop-prod get ingress
+kubectl -n collector-shop-prod get certificate
 ```
 
 Si tu deployes avec Argo CD, cree d'abord le secret Docker Hub dans le cluster, puis laisse Argo CD synchroniser le reste du dossier `prod/k3s`.
@@ -60,8 +63,8 @@ kubectl -n collector-shop-prod rollout restart deployment/go-api deployment/coll
 
 ## 4) Acces
 
-- Front: `http://collector-app.romainnigond.fr`
-- API: `http://collector-api.romainnigond.fr/products`, `http://collector-api.romainnigond.fr/auth/login`, etc.
+- Front: `https://collector-app.romainnigond.fr`
+- API: `https://collector-api.romainnigond.fr/products`, `https://collector-api.romainnigond.fr/auth/login`, etc.
 
 ## 5) Test de charge et scale-out
 
@@ -79,7 +82,7 @@ Puis lance le scenario `k6` range dans `tests/load/collector-spa`.
 Exemple:
 
 ```sh
-k6 run tests/load/collector-spa/k6/scale-up.js -e BASE_URL=http://collector-app.romainnigond.fr
+k6 run tests/load/collector-spa/k6/scale-up.js -e BASE_URL=https://collector-app.romainnigond.fr
 ```
 
 Si tu attaques l'Ingress via l'IP du noeud plutot que via `collector-app.romainnigond.fr`, ajoute `-e HOST_HEADER=collector-app.romainnigond.fr`.
@@ -87,6 +90,6 @@ Si tu attaques l'Ingress via l'IP du noeud plutot que via `collector-app.romainn
 ## Notes
 
 - `API_BASE_URL` est interne au cluster (`http://go-api:8080`) pour le SSR.
-- `API_PUBLIC_BASE_URL` est publique (`http://collector-api.romainnigond.fr`) pour les URLs d'images dans le navigateur.
+- `API_PUBLIC_BASE_URL` est publique (`https://collector-api.romainnigond.fr`) pour les URLs d'images dans le navigateur.
 - `STRIPE_CHECKOUT_ALLOWED_ORIGINS` limite les URLs de retour Checkout acceptees par l'API. C'est volontaire pour eviter qu'un client fournisse une redirection arbitraire.
 - Le scenario de charge est prevu pour montrer le scale-out du front. L'API `go-api` reste mono-replica dans cette base k3s.

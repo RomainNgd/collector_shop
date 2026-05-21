@@ -25,7 +25,7 @@ Ce script attend qu'un pod supplementaire `collector-spa` devienne `Ready`.
 Avec `k6` installe localement:
 
 ```powershell
-k6 run .\tests\load\collector-spa\k6\scale-up.js -e BASE_URL=http://collector-app.romainnigond.fr
+k6 run .\tests\load\collector-spa\k6\scale-up.js -e BASE_URL=https://collector-app.romainnigond.fr
 ```
 
 Si tu vises l'IP du noeud k3s au lieu du host `collector-app.romainnigond.fr`, surcharge le header Host:
@@ -36,7 +36,7 @@ k6 run .\tests\load\collector-spa\k6\scale-up.js -e BASE_URL=http://192.168.1.50
 
 ## Variables utiles
 
-- `BASE_URL`: URL d'entree du front. Defaut `http://collector-app.romainnigond.fr`
+- `BASE_URL`: URL d'entree du front. Defaut `https://collector-app.romainnigond.fr`
 - `PATH_TO_HIT`: chemin HTTP cible. Defaut `/`
 - `HOST_HEADER`: header `Host` optionnel si tu passes par l'IP du noeud
 - `PEAK_VUS`: charge max. Defaut `180`

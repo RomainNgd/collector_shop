@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: collector-shop
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:RomainNgd/collector_shop.git
+    targetRevision: main
+    path: prod/k3s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: collector-shop-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

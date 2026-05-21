@@ -2,13 +2,15 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: collector-shop-config
+  namespace: collector-shop-prod
 data:
   DB_PORT: "5432"
   DB_AUTO_MIGRATE: "true"
   MAX_FILE_SIZE: "5242880"
   API_PORT: "8080"
   SPA_PORT: "3000"
+  GIN_MODE: "release"
   API_BASE_URL: "http://go-api:8080"
-  API_PUBLIC_BASE_URL: "http://collector-api.romainnigond.fr"
+  API_PUBLIC_BASE_URL: "https://collector-api.romainnigond.fr"
   STRIPE_ENABLED: "false"
-  STRIPE_CHECKOUT_ALLOWED_ORIGINS: "http://collector-app.romainnigond.fr"
+  STRIPE_CHECKOUT_ALLOWED_ORIGINS: "https://collector-app.romainnigond.fr"
