@@ -166,17 +166,19 @@ Ces Applications ne pointent pas vers `prod/k3s`: un redeploiement de Collector 
 Verifier le deploiement et recuperer le mot de passe genere par le chart Helm:
 
 ```sh
-kubectl -n monitoring get ingress,certificate,pods
+kubectl -n monitoring get ingress
+kubectl -n monitoring get pods
+kubectl -n monitoring get certificate grafana-tls -w
 kubectl -n monitoring get secret grafana -o jsonpath='{.data.admin-password}' | base64 -d
 ```
 
-Ouvre `https://grafana.romainnigond.fr` avec l'utilisateur `admin`. L'acces anonyme et l'inscription sont desactives, les cookies de session sont limites a HTTPS et Prometheus reste interne au cluster. Dans **Explore**, les requetes utiles sont:
+Ouvre `https://grafana.romainnigond.fr` avec l'utilisateur `admin`. L'acces anonyme et l'inscription sont desactives, les cookies de session sont limites a HTTPS et Prometheus reste interne au cluster.
 
-```promql
-rate(collector_http_requests_total[5m])
-histogram_quantile(0.95, sum by (le) (rate(collector_http_request_duration_seconds_bucket[5m])))
-100 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100
-```
+Le dossier **Dashboards > Monitoring** est provisionne automatiquement avec:
+
+- **Collector Shop - Vue rapide**: debit, erreurs, latence, CPU, RAM et disque;
+- **Node Exporter Full**: diagnostic complet du serveur;
+- **Go Runtime Exporter**: memoire, goroutines et garbage collector de l'API.
 
 Prometheus conserve 7 jours de metriques sur 5 Gi. Grafana utilise 1 Gi. Seul Grafana possede un Ingress public.
 
