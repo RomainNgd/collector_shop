@@ -26,8 +26,9 @@ kubectl create secret docker-registry dockerhub-pull-secret `
 - Creer les secrets dans le cluster avant le deploiement. `secret.example.yaml` sert seulement d'exemple et n'est pas applique par `kustomization.yaml`.
 - `JWT_SECRET` est utilise par l'API et par le front SSR: les deux doivent partager exactement la meme valeur pour verifier les cookies de session.
 - Si Stripe est active, renseigne aussi `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` et garde `STRIPE_CHECKOUT_ALLOWED_ORIGINS` aligne avec l'origine publique HTTPS du front.
-- `metrics-server` doit etre installe si tu veux que le `HorizontalPodAutoscaler` fonctionne.
+- `metrics-server`, fourni par defaut avec k3s sauf desactivation explicite, doit fonctionner pour que le `HorizontalPodAutoscaler` fonctionne.
 - Verifie que `kubectl top pods -n collector-shop-prod` repond avant de lancer un test de charge.
+- Prometheus et Grafana sont geres par des Applications Argo CD separees dans `prod/argocd/monitoring-application.yaml`.
 - cert-manager doit etre installe et le `ClusterIssuer` `letsencrypt-prod` doit exister avant la synchronisation Argo CD.
 
 ## 2) Configurer le DNS

@@ -141,6 +141,39 @@ kubectl -n argocd get application collector-shop
 
 Argo CD synchronise ensuite le dossier `prod/k3s`.
 
+La supervision possede deux Applications Argo CD separees de l'application:
+
+- Prometheus conserve les metriques et installe `node-exporter` pour le serveur;
+- Grafana affiche les metriques et recoit automatiquement Prometheus comme datasource.
+
+Il n'y a aucun dossier a copier sur le serveur. Le fichier ci-dessous indique a Argo CD de telecharger les charts Helm officiels et de les installer dans le namespace `monitoring`:
+
+```sh
+kubectl apply -f https://raw.githubusercontent.com/RomainNgd/collector_shop/main/prod/argocd/monitoring-application.yaml
+kubectl -n argocd get applications prometheus grafana
+```
+
+Si le repo est prive, execute plutot `kubectl apply -f prod/argocd/monitoring-application.yaml` depuis ton PC, avec ton `kubectl` configure pour le serveur. Le repo n'a toujours pas besoin d'etre clone sur le VPS.
+
+Ces Applications ne pointent pas vers `prod/k3s`: un redeploiement de Collector Shop ne supprime donc pas la supervision.
+
+Pour ouvrir Grafana sans l'exposer sur Internet:
+
+```sh
+kubectl -n monitoring port-forward svc/grafana 3001:80
+kubectl -n monitoring get secret grafana -o jsonpath='{.data.admin-password}' | base64 -d
+```
+
+Ouvre `http://localhost:3001` avec l'utilisateur `admin`. Dans **Explore**, les requetes utiles sont:
+
+```promql
+rate(collector_http_requests_total[5m])
+histogram_quantile(0.95, sum by (le) (rate(collector_http_request_duration_seconds_bucket[5m])))
+100 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100
+```
+
+Prometheus conserve 7 jours de metriques sur 5 Gi. Grafana utilise 1 Gi. Aucun Ingress public n'est cree.
+
 ## 7. Verification
 
 ```sh

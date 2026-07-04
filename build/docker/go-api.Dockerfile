@@ -27,5 +27,6 @@ VOLUME ["/app/upload"]
 USER app
 
 EXPOSE 8080
+EXPOSE 9090
 
 CMD ["go-api"]

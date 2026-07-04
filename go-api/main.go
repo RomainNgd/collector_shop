@@ -12,6 +12,7 @@ import (
 	"poc-gin/middlewares"
 	"poc-gin/models"
 	"poc-gin/pkg/logger"
+	appmetrics "poc-gin/pkg/metrics"
 	"poc-gin/routes"
 	"poc-gin/services"
 	"syscall"
@@ -87,7 +88,8 @@ func runServer(cfg *config.Config) error {
 	orderHandler := controllers.NewOrderHandler(orderService, orderPaymentService)
 	paymentHandler := controllers.NewPaymentHandler(orderPaymentService)
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Logger(), gin.Recovery(), appmetrics.Middleware())
 
 	// Static files must be registered BEFORE dynamic routes
 	r.Static("/upload", cfg.Upload.Dir)
@@ -103,6 +105,20 @@ func runServer(cfg *config.Config) error {
 		Addr:    fmt.Sprintf(":%s", cfg.Server.Port),
 		Handler: r,
 	}
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", appmetrics.Handler())
+	metricsServer := &http.Server{
+		Addr:              fmt.Sprintf(":%s", cfg.Server.MetricsPort),
+		Handler:           metricsMux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		logger.Info("Metrics server starting on port %s", cfg.Server.MetricsPort)
+		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("Metrics server failed: %v", err)
+		}
+	}()
 
 	go func() {
 		logger.Info("Server starting on port %s", cfg.Server.Port)
@@ -122,6 +138,9 @@ func runServer(cfg *config.Config) error {
 
 	if err := srv.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server forced to shutdown: %w", err)
+	}
+	if err := metricsServer.Shutdown(ctx); err != nil {
+		return fmt.Errorf("metrics server forced to shutdown: %w", err)
 	}
 
 	logger.Info("Server stopped gracefully")
