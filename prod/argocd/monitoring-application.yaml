@@ -67,6 +67,19 @@ spec:
         resources:
           requests: {cpu: 50m, memory: 128Mi}
           limits: {cpu: 300m, memory: 512Mi}
+        ingress:
+          enabled: true
+          ingressClassName: traefik
+          annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-prod
+          hosts:
+            - grafana.romainnigond.fr
+          path: /
+          pathType: Prefix
+          tls:
+            - secretName: grafana-tls
+              hosts:
+                - grafana.romainnigond.fr
         datasources:
           datasources.yaml:
             apiVersion: 1
@@ -78,6 +91,15 @@ spec:
                 access: proxy
                 isDefault: true
         grafana.ini:
+          server:
+            domain: grafana.romainnigond.fr
+            root_url: https://grafana.romainnigond.fr
+            enforce_domain: true
+          security:
+            cookie_secure: true
+            cookie_samesite: strict
+            strict_transport_security: true
+            strict_transport_security_max_age_seconds: 31536000
           users:
             allow_sign_up: false
           auth.anonymous:
