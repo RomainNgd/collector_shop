@@ -33,6 +33,12 @@ jobs:
           name: go-coverage
           path: go-api
 
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: collector-spa/coverage
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

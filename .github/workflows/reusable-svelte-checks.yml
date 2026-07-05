@@ -21,3 +21,10 @@ jobs:
 
       - name: Run frontend checks
         run: bash collector-spa/scripts/ci-test.sh
+
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: collector-spa/coverage/lcov.info
+          if-no-files-found: error
