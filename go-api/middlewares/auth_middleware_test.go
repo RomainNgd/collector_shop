@@ -46,7 +46,7 @@ func performMiddlewareRequest(middleware gin.HandlerFunc, header string, setup f
 }
 
 func TestAuthenticate(t *testing.T) {
-	secret := "test-secret"
+	secret := newTestSecret(t)
 	middleware := NewAuthMiddleware(secret)
 
 	t.Run("returns 401 when header is missing", func(t *testing.T) {
@@ -113,7 +113,7 @@ func TestAuthenticate(t *testing.T) {
 }
 
 func TestRequireAdmin(t *testing.T) {
-	middleware := NewAuthMiddleware("unused")
+	middleware := NewAuthMiddleware(newTestSecret(t))
 
 	run := func(seedRole any, setRole bool) *httptest.ResponseRecorder {
 		recorder := httptest.NewRecorder()

@@ -20,7 +20,7 @@ COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
 COPY collector-spa/package.json ./package.json
 
-USER node
+USER 1000:1000
 
 EXPOSE 3000
 

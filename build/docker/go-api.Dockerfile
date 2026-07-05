@@ -15,7 +15,11 @@ FROM alpine:3.22 AS runtime
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates && addgroup -S app && adduser -S -G app app && mkdir -p /app/upload && chown -R app:app /app
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S -g 10001 app \
+    && adduser -S -D -H -u 10001 -G app app \
+    && mkdir -p /app/upload \
+    && chown -R app:app /app
 
 ENV PORT=8080
 ENV UPLOAD_DIR=/app/upload
@@ -24,7 +28,7 @@ COPY --from=build /out/go-api /usr/local/bin/go-api
 
 VOLUME ["/app/upload"]
 
-USER app
+USER 10001:10001
 
 EXPOSE 8080
 EXPOSE 9090

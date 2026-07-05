@@ -196,7 +196,7 @@ func signToken(t *testing.T, secret string, userID uint, role string) string {
 
 func TestAuthRoutesIntegration(t *testing.T) {
 	tx := openIntegrationTx(t)
-	router := buildRouter(t, tx, "integration-secret")
+	router := buildRouter(t, tx, newTestSecret(t))
 	email := fmt.Sprintf("api-%d@example.com", time.Now().UnixNano())
 
 	registerResp := performJSONRequest(t, router, http.MethodPost, "/auth/register", map[string]any{
@@ -218,7 +218,7 @@ func TestAuthRoutesIntegration(t *testing.T) {
 
 func TestCategoryRoutesIntegration(t *testing.T) {
 	tx := openIntegrationTx(t)
-	secret := "integration-secret"
+	secret := newTestSecret(t)
 	router := buildRouter(t, tx, secret)
 
 	category := &models.Category{Name: fmt.Sprintf("Public-%d", time.Now().UnixNano()), Description: "Public category"}
@@ -270,7 +270,7 @@ func TestCategoryRoutesIntegration(t *testing.T) {
 
 func TestProductRoutesIntegration(t *testing.T) {
 	tx := openIntegrationTx(t)
-	secret := "integration-secret"
+	secret := newTestSecret(t)
 	router := buildRouter(t, tx, secret)
 
 	admin := &models.User{Email: fmt.Sprintf("admin-%d@example.com", time.Now().UnixNano()), Password: "hash", Role: constants.RoleAdmin}
@@ -316,7 +316,7 @@ func TestProductRoutesIntegration(t *testing.T) {
 
 func TestPromotionRoutesIntegration(t *testing.T) {
 	tx := openIntegrationTx(t)
-	secret := "integration-secret"
+	secret := newTestSecret(t)
 	router := buildRouter(t, tx, secret)
 
 	admin := &models.User{Email: fmt.Sprintf("admin-%d@example.com", time.Now().UnixNano()), Password: "hash", Role: constants.RoleAdmin}
@@ -381,7 +381,7 @@ func TestPromotionRoutesIntegration(t *testing.T) {
 
 func TestOrderRoutesIntegration(t *testing.T) {
 	tx := openIntegrationTx(t)
-	secret := "integration-secret"
+	secret := newTestSecret(t)
 	router := buildRouter(t, tx, secret)
 
 	user := &models.User{Email: fmt.Sprintf("buyer-%d@example.com", time.Now().UnixNano()), Password: "hash", Role: constants.RoleUser}
@@ -449,7 +449,7 @@ func TestOrderRoutesIntegration(t *testing.T) {
 
 func TestOrderCheckoutSessionRouteIntegration(t *testing.T) {
 	tx := openIntegrationTx(t)
-	secret := "integration-secret"
+	secret := newTestSecret(t)
 	router := buildRouter(t, tx, secret)
 
 	user := &models.User{Email: fmt.Sprintf("checkout-%d@example.com", time.Now().UnixNano()), Password: "hash", Role: constants.RoleUser}

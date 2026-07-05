@@ -28,7 +28,7 @@ func signSecurityToken(t *testing.T, secret string, userID uint, role string, ex
 
 func TestSecurityProtectedRoutesRejectInvalidTokens(t *testing.T) {
 	tx := openIntegrationTx(t)
-	secret := "integration-secret"
+	secret := newTestSecret(t)
 	router := buildRouter(t, tx, secret)
 
 	user := &models.User{
@@ -49,7 +49,7 @@ func TestSecurityProtectedRoutesRejectInvalidTokens(t *testing.T) {
 	})
 
 	t.Run("token signed with wrong secret", func(t *testing.T) {
-		token := signSecurityToken(t, "wrong-secret", user.ID, user.Role, time.Now().Add(time.Hour))
+		token := signSecurityToken(t, newTestSecret(t), user.ID, user.Role, time.Now().Add(time.Hour))
 		resp := performJSONRequest(t, router, http.MethodGet, "/orders", nil, token)
 		if resp.Code != http.StatusUnauthorized {
 			t.Fatalf("expected 401 for wrong secret token, got %d body=%s", resp.Code, resp.Body.String())
@@ -59,7 +59,7 @@ func TestSecurityProtectedRoutesRejectInvalidTokens(t *testing.T) {
 
 func TestSecurityAdminRoutesRejectNonAdminUsers(t *testing.T) {
 	tx := openIntegrationTx(t)
-	secret := "integration-secret"
+	secret := newTestSecret(t)
 	router := buildRouter(t, tx, secret)
 
 	user := &models.User{
@@ -83,7 +83,7 @@ func TestSecurityAdminRoutesRejectNonAdminUsers(t *testing.T) {
 
 func TestSecurityUserCannotReadAnotherUsersOrder(t *testing.T) {
 	tx := openIntegrationTx(t)
-	secret := "integration-secret"
+	secret := newTestSecret(t)
 	router := buildRouter(t, tx, secret)
 
 	owner := &models.User{

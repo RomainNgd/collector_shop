@@ -28,45 +28,45 @@ Le score est calculé ainsi :
 Score = probabilité × impact
 ```
 
-| Score | Priorité | Traitement attendu |
-|---:|---|---|
+|   Score | Priorité      | Traitement attendu                              |
+| ------: | ------------- | ----------------------------------------------- |
 | 12 à 16 | P0 — critique | Bloquer une livraison et corriger immédiatement |
-| 8 à 11 | P1 — haute | Corriger avant la prochaine version |
-| 4 à 7 | P2 — moyenne | Planifier dans une prochaine itération |
-| 1 à 3 | P3 — faible | Accepter temporairement ou surveiller |
+|  8 à 11 | P1 — haute    | Corriger avant la prochaine version             |
+|   4 à 7 | P2 — moyenne  | Planifier dans une prochaine itération          |
+|   1 à 3 | P3 — faible   | Accepter temporairement ou surveiller           |
 
 ## 3. Protections déjà en place
 
-| Contrôle | État | Preuve technique |
-|---|---|---|
-| Chiffrement des flux publics | Couvert | Ingress TLS avec cert-manager et Let's Encrypt |
-| Stockage des mots de passe | Couvert | Hachage bcrypt dans `go-api/services/auth_service.go` |
-| Authentification et autorisation | Couvert | JWT, middleware serveur et contrôle du rôle administrateur |
-| Protection des commandes | Couvert | Contrôle du propriétaire et recalcul des prix côté API |
-| Paiement | Couvert | Stripe Checkout et validation cryptographique du webhook |
-| Validation des images | Couvert | Taille, extension, signature binaire et nom généré en UUID |
-| Détection automatisée | Partiel | Trivy est exécuté, mais ne bloque pas encore la CI |
-| Secrets de production | Couvert | Secrets créés dans K3s et absents des manifests versionnés |
+| Contrôle                         | État    | Preuve technique                                                                              |
+| -------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| Chiffrement des flux publics     | Couvert | Ingress TLS avec cert-manager et Let's Encrypt                                                |
+| Stockage des mots de passe       | Couvert | Hachage bcrypt dans `go-api/services/auth_service.go`                                         |
+| Authentification et autorisation | Couvert | JWT, middleware serveur et contrôle du rôle administrateur                                    |
+| Protection des commandes         | Couvert | Contrôle du propriétaire et recalcul des prix côté API                                        |
+| Paiement                         | Couvert | Stripe Checkout et validation cryptographique du webhook                                      |
+| Validation des images            | Couvert | Taille, extension, signature binaire et nom généré en UUID                                    |
+| Détection automatisée            | Couvert | Trivy bloque les résultats `HIGH` et `CRITICAL` corrigibles ; scan local propre le 05/07/2026 |
+| Secrets de production            | Couvert | Secrets créés dans K3s et absents des manifests versionnés                                    |
 
 ## 4. Synthèse des risques
 
-| ID | Risque | Probabilité | Impact | Score | Priorité | État |
-|---|---|---:|---:|---:|---|---|
-| SEC-01 | La CI accepte les vulnérabilités hautes et critiques | 3 | 4 | 12 | P0 | Implémenté, CI à valider |
-| SEC-02 | SonarCloud peut être ignoré sans faire échouer la CI | 2 | 4 | 8 | P1 | Implémenté, secrets à configurer |
-| SEC-03 | Aucune limitation des tentatives de connexion | 3 | 3 | 9 | P1 | À traiter |
-| SEC-04 | En-têtes HTTP de sécurité incomplets | 3 | 3 | 9 | P1 | À traiter |
-| SEC-05 | Déploiement d'images utilisant le tag `latest` | 2 | 4 | 8 | P1 | À traiter |
-| SEC-06 | Sauvegarde et restauration PostgreSQL non définies | 2 | 4 | 8 | P1 | À traiter |
-| SEC-07 | Durcissement et isolation Kubernetes incomplets | 2 | 3 | 6 | P2 | Planifié |
-| SEC-08 | Cycle de vie des JWT limité | 2 | 3 | 6 | P2 | Planifié |
-| SEC-09 | Détection et alertes de sécurité insuffisantes | 2 | 3 | 6 | P2 | Planifié |
+| ID     | Risque                                               | Probabilité | Impact | Score | Priorité | État                                        |
+| ------ | ---------------------------------------------------- | ----------: | -----: | ----: | -------- | ------------------------------------------- |
+| SEC-01 | La CI accepte les vulnérabilités hautes et critiques |           3 |      4 |    12 | P0       | Corrigé localement, CI à confirmer          |
+| SEC-02 | SonarCloud peut être ignoré sans faire échouer la CI |           2 |      4 |     8 | P1       | Corrigé localement, SonarCloud à confirmer  |
+| SEC-03 | Aucune limitation des tentatives de connexion        |           3 |      3 |     9 | P1       | À traiter                                   |
+| SEC-04 | En-têtes HTTP de sécurité incomplets                 |           3 |      3 |     9 | P1       | À traiter                                   |
+| SEC-05 | Déploiement d'images utilisant le tag `latest`       |           2 |      4 |     8 | P1       | À traiter                                   |
+| SEC-06 | Sauvegarde et restauration PostgreSQL non définies   |           2 |      4 |     8 | P1       | À traiter                                   |
+| SEC-07 | Durcissement et isolation Kubernetes incomplets      |           2 |      3 |     6 | P2       | Corrigé localement, déploiement à confirmer |
+| SEC-08 | Cycle de vie des JWT limité                          |           2 |      3 |     6 | P2       | Planifié                                    |
+| SEC-09 | Détection et alertes de sécurité insuffisantes       |           2 |      3 |     6 | P2       | Planifié                                    |
 
 ## 5. Actions détaillées
 
 ### SEC-01 — Rendre les scans Trivy bloquants
 
-**Constat :** les trois scans utilisent `exit-code: "0"` dans `.github/workflows/reusable-build-and-scan.yml`. Une vulnérabilité haute ou critique produit un rapport, mais la pipeline reste verte.
+**Constat initial :** les trois scans utilisaient `exit-code: "0"` dans `.github/workflows/reusable-build-and-scan.yml`. Une vulnérabilité haute ou critique produisait un rapport, mais la pipeline restait verte.
 
 **Risque :** une dépendance ou une image vulnérable peut être publiée sur Docker Hub.
 
@@ -87,11 +87,16 @@ La CI doit échouer si Trivy détecte une vulnérabilité interdite. Après corr
 
 **Responsable :** DevOps — **Échéance :** immédiate.
 
-**Avancement :** configuration implémentée. Le passage à l'état **Corrigé** nécessite une exécution réussie de la CI avec les scans bloquants.
+**Avancement :**
+
+- les scans sont bloquants uniquement pour les résultats `HIGH` et `CRITICAL` disposant d'un correctif ;
+- `pgx/v5`, `quic-go`, `golang.org/x/crypto` et `golang.org/x/net` ont été mis à jour vers leurs versions corrigées ;
+- le scan Trivy local du 05/07/2026 retourne 0 vulnérabilité, 0 secret et 0 mauvaise configuration sur le dépôt ;
+- les images Docker sont construites avec succès ; leur scan final reste à confirmer dans la prochaine CI.
 
 ### SEC-02 — Activer réellement SonarCloud
 
-**Constat :** le workflow termine avec succès lorsque `SONAR_TOKEN` ou `SONAR_ORGANIZATION` manque. L'analyse est alors marquée comme ignorée.
+**Constat initial :** le workflow terminait avec succès lorsque `SONAR_TOKEN` ou `SONAR_ORGANIZATION` manquait. L'analyse était alors marquée comme ignorée.
 
 **Risque :** les vulnérabilités de code, la duplication et la complexité ne sont pas contrôlées.
 
@@ -108,7 +113,12 @@ La CI doit échouer si Trivy détecte une vulnérabilité interdite. Après corr
 
 **Responsable :** Lead developer — **Échéance :** avant la prochaine livraison.
 
-**Avancement :** workflow rendu obligatoire et Quality Gate bloquante. Le secret `SONAR_TOKEN` et la variable `SONAR_ORGANIZATION` doivent encore être configurés dans GitHub avant validation.
+**Avancement :**
+
+- workflow rendu obligatoire et Quality Gate bloquante ;
+- la publication Docker attend maintenant la réussite de SonarCloud ;
+- les secrets JWT statiques utilisés par les tests ont été remplacés par des valeurs aléatoires générées à l'exécution ;
+- le prochain scan SonarCloud doit confirmer la disparition de l'alerte `go:S6437` et le bon fonctionnement du jeton `SONAR_TOKEN`.
 
 ### SEC-03 — Limiter les tentatives de connexion
 
@@ -241,6 +251,8 @@ Ajouter ensuite des `NetworkPolicy` : refus par défaut, accès Ingress vers le 
 
 **Responsable :** DevOps — **Échéance :** itération suivante.
 
+**Avancement :** les workloads du front, de l'API et de PostgreSQL utilisent maintenant un utilisateur numérique non-root, `RuntimeDefault`, une racine en lecture seule, aucune élévation de privilèges et aucune capability Linux. Les chemins modifiables utilisent des volumes dédiés. Le scan Trivy local ne signale plus les règles `KSV-0014` et `KSV-0118`. Le démarrage dans K3s reste à valider après publication des nouvelles images.
+
 ### SEC-08 — Renforcer le cycle de vie des JWT
 
 **Correction technique :**
@@ -299,6 +311,14 @@ sum(rate(collector_http_requests_total{route="/auth/login",status="401"}[5m])) >
 3. Ajouter les alertes de sécurité.
 
 ## 7. Suivi du plan
+
+### Journal de traitement
+
+| Date       | Risque | Action réalisée                                                          | Preuve                                                        | Statut                         |
+| ---------- | ------ | ------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------ |
+| 05/07/2026 | SEC-01 | Scans bloquants et dépendances Go mises à jour                           | Tests Go réussis et scan Trivy du dépôt à 0 résultat bloquant | Validation CI attendue         |
+| 05/07/2026 | SEC-02 | Quality Gate obligatoire et secrets de test générés aléatoirement        | Tests Go réussis ; nouveau scan SonarCloud attendu            | Validation SonarCloud attendue |
+| 05/07/2026 | SEC-07 | `securityContext`, utilisateur non-root et volumes inscriptibles ajoutés | Trivy : 0 mauvaise configuration haute ou critique            | Validation K3s attendue        |
 
 Pour passer une action à l'état **Corrigé**, il faut conserver :
 

@@ -15,7 +15,7 @@ import (
 
 func TestAuthServiceRegister(t *testing.T) {
 	tx := openIntegrationTx(t)
-	service := NewAuthService(tx, "test-secret")
+	service := NewAuthService(tx, newTestSecret(t))
 
 	user, err := service.Register(context.Background(), fmt.Sprintf("user-%d@example.com", time.Now().UnixNano()), "password123")
 	if err != nil {
@@ -34,7 +34,7 @@ func TestAuthServiceRegister(t *testing.T) {
 
 func TestAuthServiceRegisterDuplicateEmail(t *testing.T) {
 	tx := openIntegrationTx(t)
-	service := NewAuthService(tx, "test-secret")
+	service := NewAuthService(tx, newTestSecret(t))
 	email := fmt.Sprintf("dup-%d@example.com", time.Now().UnixNano())
 
 	if _, err := service.Register(context.Background(), email, "password123"); err != nil {
@@ -49,7 +49,8 @@ func TestAuthServiceRegisterDuplicateEmail(t *testing.T) {
 
 func TestAuthServiceLogin(t *testing.T) {
 	tx := openIntegrationTx(t)
-	service := NewAuthService(tx, "test-secret")
+	secret := newTestSecret(t)
+	service := NewAuthService(tx, secret)
 	email := fmt.Sprintf("login-%d@example.com", time.Now().UnixNano())
 
 	if _, err := service.Register(context.Background(), email, "password123"); err != nil {
@@ -77,7 +78,7 @@ func TestAuthServiceLogin(t *testing.T) {
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			return []byte("test-secret"), nil
+			return []byte(secret), nil
 		})
 		if err != nil || !token.Valid {
 			t.Fatalf("expected valid jwt, got err=%v", err)
@@ -101,7 +102,7 @@ func TestAuthServiceLogin(t *testing.T) {
 
 func TestAuthServiceLoginDatabaseError(t *testing.T) {
 	tx := openIntegrationTx(t)
-	service := NewAuthService(tx, "test-secret")
+	service := NewAuthService(tx, newTestSecret(t))
 
 	if err := tx.Exec("DROP TABLE IF EXISTS users CASCADE").Error; err != nil {
 		t.Fatalf("failed to drop users table: %v", err)
@@ -115,7 +116,7 @@ func TestAuthServiceLoginDatabaseError(t *testing.T) {
 
 func TestAuthServiceRegisterPersistsUserFields(t *testing.T) {
 	tx := openIntegrationTx(t)
-	service := NewAuthService(tx, "test-secret")
+	service := NewAuthService(tx, newTestSecret(t))
 	email := fmt.Sprintf("persist-%d@example.com", time.Now().UnixNano())
 
 	user, err := service.Register(context.Background(), email, "password123")

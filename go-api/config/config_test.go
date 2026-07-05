@@ -19,7 +19,7 @@ func TestValidate(t *testing.T) {
 				Host:     "127.0.0.1",
 				Port:     "5432",
 				User:     "user",
-				Password: "password",
+				Password: newTestSecret(t),
 				Name:     "db",
 			},
 		}
@@ -34,10 +34,10 @@ func TestValidate(t *testing.T) {
 				Host:     "127.0.0.1",
 				Port:     "5432",
 				User:     "user",
-				Password: "password",
+				Password: newTestSecret(t),
 				Name:     "db",
 			},
-			JWT: JWTConfig{Secret: "secret"},
+			JWT: JWTConfig{Secret: newTestSecret(t)},
 		}
 		if err := cfg.Validate(); err != nil {
 			t.Fatalf("expected valid config, got %v", err)
@@ -50,10 +50,10 @@ func TestValidate(t *testing.T) {
 				Host:     "127.0.0.1",
 				Port:     "5432",
 				User:     "user",
-				Password: "password",
+				Password: newTestSecret(t),
 				Name:     "db",
 			},
-			JWT: JWTConfig{Secret: "secret"},
+			JWT: JWTConfig{Secret: newTestSecret(t)},
 			Stripe: StripeConfig{
 				Enabled: true,
 			},
@@ -70,14 +70,14 @@ func TestValidate(t *testing.T) {
 				Host:     "127.0.0.1",
 				Port:     "5432",
 				User:     "user",
-				Password: "password",
+				Password: newTestSecret(t),
 				Name:     "db",
 			},
-			JWT: JWTConfig{Secret: "secret"},
+			JWT: JWTConfig{Secret: newTestSecret(t)},
 			Stripe: StripeConfig{
 				Enabled:       true,
-				SecretKey:     "sk_test_123",
-				WebhookSecret: "whsec_123",
+				SecretKey:     newTestSecret(t),
+				WebhookSecret: newTestSecret(t),
 			},
 		}
 
@@ -130,9 +130,9 @@ func TestLoad(t *testing.T) {
 		"DB_HOST":         "127.0.0.1",
 		"DB_PORT":         "5432",
 		"DB_USER":         "user",
-		"DB_PASSWORD":     "password",
+		"DB_PASSWORD":     newTestSecret(t),
 		"DB_NAME":         "db",
-		"JWT_SECRET":      "secret",
+		"JWT_SECRET":      newTestSecret(t),
 		"DB_AUTO_MIGRATE": "true",
 	}
 	for key, value := range env {

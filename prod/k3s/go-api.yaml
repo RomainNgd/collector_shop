@@ -27,10 +27,23 @@ spec:
     spec:
       imagePullSecrets:
         - name: dockerhub-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: go-api
           image: romain2311/go-api:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 8080
               name: http
@@ -114,6 +127,8 @@ spec:
           volumeMounts:
             - name: go-api-uploads
               mountPath: /app/upload
+            - name: tmp
+              mountPath: /tmp
           startupProbe:
             tcpSocket:
               port: 8080
@@ -133,6 +148,8 @@ spec:
         - name: go-api-uploads
           persistentVolumeClaim:
             claimName: go-api-uploads
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
