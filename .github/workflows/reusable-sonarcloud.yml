@@ -2,11 +2,6 @@ name: Reusable SonarCloud
 
 on:
   workflow_call:
-    inputs:
-      sonar_organization:
-        description: SonarCloud organization key
-        required: true
-        type: string
     secrets:
       sonar_token:
         required: true
@@ -17,9 +12,16 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SONAR_TOKEN: ${{ secrets.sonar_token }}
-      SONAR_ORGANIZATION: ${{ inputs.sonar_organization }}
 
     steps:
+      - name: Validate SonarCloud token
+        shell: bash
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "SONAR_TOKEN is not configured in the repository Actions secrets."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -32,12 +34,10 @@ jobs:
           path: go-api
 
       - name: SonarCloud scan
-        uses: SonarSource/sonarqube-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
         with:
           args: >
-            -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
-            -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=300

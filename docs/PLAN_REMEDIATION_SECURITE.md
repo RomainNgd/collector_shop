@@ -91,6 +91,7 @@ La CI doit échouer si Trivy détecte une vulnérabilité interdite. Après corr
 
 - les scans sont bloquants uniquement pour les résultats `HIGH` et `CRITICAL` disposant d'un correctif ;
 - `pgx/v5`, `quic-go`, `golang.org/x/crypto` et `golang.org/x/net` ont été mis à jour vers leurs versions corrigées ;
+- l'image API est compilée avec Go 1.26.4 afin de corriger les vulnérabilités de la bibliothèque standard présentes dans Go 1.26.3 ;
 - le scan Trivy local du 05/07/2026 retourne 0 vulnérabilité, 0 secret et 0 mauvaise configuration sur le dépôt ;
 - les images Docker sont construites avec succès ; leur scan final reste à confirmer dans la prochaine CI.
 
@@ -103,11 +104,12 @@ La CI doit échouer si Trivy détecte une vulnérabilité interdite. Après corr
 **Correction technique :**
 
 1. Ajouter `SONAR_TOKEN` dans les secrets GitHub du dépôt.
-2. Ajouter `SONAR_ORGANIZATION` dans les variables GitHub.
-3. Rendre ces paramètres obligatoires dans `reusable-sonarcloud.yml`.
-4. Supprimer le comportement silencieux `Skip SonarCloud when not configured` sur `main`.
-5. Ajouter `-Dsonar.qualitygate.wait=true` au scan.
-6. Configurer une Quality Gate : aucune nouvelle vulnérabilité, couverture du nouveau code au moins égale à 80 % et duplication inférieure à 3 %.
+2. Définir l'organisation `romainngd` dans `sonar-project.properties`.
+3. Rendre le token obligatoire dans `reusable-sonarcloud.yml`.
+4. Utiliser `SonarSource/sonarqube-scan-action@v6`.
+5. Supprimer le comportement silencieux `Skip SonarCloud when not configured` sur `main`.
+6. Ajouter `-Dsonar.qualitygate.wait=true` au scan.
+7. Configurer une Quality Gate : aucune nouvelle vulnérabilité, couverture du nouveau code au moins égale à 80 % et duplication inférieure à 3 %.
 
 **Validation :** la dernière pipeline doit afficher l'étape `SonarCloud scan` comme exécutée. Une Quality Gate rouge doit faire échouer le job.
 
@@ -117,6 +119,7 @@ La CI doit échouer si Trivy détecte une vulnérabilité interdite. Après corr
 
 - workflow rendu obligatoire et Quality Gate bloquante ;
 - la publication Docker attend maintenant la réussite de SonarCloud ;
+- l'organisation `romainngd` est versionnée dans la configuration du projet et l'action SonarCloud utilise la version sécurisée `v6` ;
 - les secrets JWT statiques utilisés par les tests ont été remplacés par des valeurs aléatoires générées à l'exécution ;
 - le prochain scan SonarCloud doit confirmer la disparition de l'alerte `go:S6437` et le bon fonctionnement du jeton `SONAR_TOKEN`.
 
@@ -314,11 +317,11 @@ sum(rate(collector_http_requests_total{route="/auth/login",status="401"}[5m])) >
 
 ### Journal de traitement
 
-| Date       | Risque | Action réalisée                                                          | Preuve                                                        | Statut                         |
-| ---------- | ------ | ------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------ |
-| 05/07/2026 | SEC-01 | Scans bloquants et dépendances Go mises à jour                           | Tests Go réussis et scan Trivy du dépôt à 0 résultat bloquant | Validation CI attendue         |
-| 05/07/2026 | SEC-02 | Quality Gate obligatoire et secrets de test générés aléatoirement        | Tests Go réussis ; nouveau scan SonarCloud attendu            | Validation SonarCloud attendue |
-| 05/07/2026 | SEC-07 | `securityContext`, utilisateur non-root et volumes inscriptibles ajoutés | Trivy : 0 mauvaise configuration haute ou critique            | Validation K3s attendue        |
+| Date       | Risque | Action réalisée                                                                          | Preuve                                                        | Statut                         |
+| ---------- | ------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------ |
+| 05/07/2026 | SEC-01 | Scans bloquants, dépendances mises à jour et compilation avec Go 1.26.4                  | Tests Go réussis et scan Trivy du dépôt à 0 résultat bloquant | Validation CI attendue         |
+| 05/07/2026 | SEC-02 | Quality Gate obligatoire, action v6, organisation corrigée et secrets de test aléatoires | Tests Go réussis ; nouveau scan SonarCloud attendu            | Validation SonarCloud attendue |
+| 05/07/2026 | SEC-07 | `securityContext`, utilisateur non-root et volumes inscriptibles ajoutés                 | Trivy : 0 mauvaise configuration haute ou critique            | Validation K3s attendue        |
 
 Pour passer une action à l'état **Corrigé**, il faut conserver :
 

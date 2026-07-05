@@ -31,8 +31,6 @@ jobs:
       - go-tests
       - svelte-checks
     uses: ./.github/workflows/reusable-sonarcloud.yml
-    with:
-      sonar_organization: ${{ vars.SONAR_ORGANIZATION }}
     secrets:
       sonar_token: ${{ secrets.SONAR_TOKEN }}
 
