@@ -5,11 +5,11 @@ on:
     inputs:
       sonar_organization:
         description: SonarCloud organization key
-        required: false
+        required: true
         type: string
     secrets:
       sonar_token:
-        required: false
+        required: true
 
 jobs:
   sonarcloud:
@@ -21,24 +21,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_ORGANIZATION != '' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Download Go coverage
-        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_ORGANIZATION != '' }}
         uses: actions/download-artifact@v4
         with:
           name: go-coverage
           path: go-api
 
-      - name: Skip SonarCloud when not configured
-        if: ${{ env.SONAR_TOKEN == '' || env.SONAR_ORGANIZATION == '' }}
-        run: echo "Skipping SonarCloud scan because SONAR_TOKEN or SONAR_ORGANIZATION is not configured."
-
       - name: SonarCloud scan
-        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_ORGANIZATION != '' }}
         uses: SonarSource/sonarqube-scan-action@v4
         env:
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
@@ -46,3 +39,5 @@ jobs:
           args: >
             -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
             -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300

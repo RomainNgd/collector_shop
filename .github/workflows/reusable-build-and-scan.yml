@@ -47,9 +47,10 @@ jobs:
           format: sarif
           output: trivy-repo-results.sarif
           severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
           ignore-unfixed: true
           hide-progress: true
-          exit-code: "0"
+          exit-code: "1"
           skip-setup-trivy: true
 
       - name: Upload Trivy repository scan results
@@ -68,7 +69,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           hide-progress: true
-          exit-code: "0"
+          exit-code: "1"
           skip-setup-trivy: true
 
       - name: Scan collector-spa image
@@ -81,5 +82,5 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           hide-progress: true
-          exit-code: "0"
+          exit-code: "1"
           skip-setup-trivy: true
