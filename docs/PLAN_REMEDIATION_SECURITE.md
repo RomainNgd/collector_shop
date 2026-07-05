@@ -121,6 +121,7 @@ La CI doit échouer si Trivy détecte une vulnérabilité interdite. Après corr
 - workflow rendu obligatoire et Quality Gate bloquante ;
 - la publication Docker attend maintenant la réussite de SonarCloud ;
 - l'organisation `romainngd` est versionnée dans la configuration du projet et l'action SonarCloud utilise la version sécurisée `v6` ;
+- le job Sonar génère le `tsconfig` SvelteKit avant l'analyse et exclut les uploads, images de fixtures et rapports qui ne sont pas du code source ;
 - les secrets JWT statiques utilisés par les tests ont été remplacés par des valeurs aléatoires générées à l'exécution ;
 - le prochain scan SonarCloud doit confirmer la disparition de l'alerte `go:S6437` et le bon fonctionnement du jeton `SONAR_TOKEN`.
 

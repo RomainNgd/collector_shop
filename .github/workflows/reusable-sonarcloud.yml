@@ -33,6 +33,19 @@ jobs:
           name: go-coverage
           path: go-api
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: collector-spa/package-lock.json
+
+      - name: Prepare SvelteKit TypeScript configuration
+        working-directory: collector-spa
+        run: |
+          npm ci --ignore-scripts
+          npm exec svelte-kit sync
+
       - name: SonarCloud scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
