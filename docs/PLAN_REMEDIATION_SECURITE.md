@@ -92,6 +92,7 @@ La CI doit échouer si Trivy détecte une vulnérabilité interdite. Après corr
 - les scans sont bloquants uniquement pour les résultats `HIGH` et `CRITICAL` disposant d'un correctif ;
 - `pgx/v5`, `quic-go`, `golang.org/x/crypto` et `golang.org/x/net` ont été mis à jour vers leurs versions corrigées ;
 - l'image API est compilée avec Go 1.26.4 afin de corriger les vulnérabilités de la bibliothèque standard présentes dans Go 1.26.3 ;
+- `npm`, `npx`, Corepack et Yarn ont été retirés de l'image front d'exécution : ils ne sont pas utilisés par `node build` et contenaient les dépendances globales vulnérables `picomatch` et `sigstore` ;
 - le scan Trivy local du 05/07/2026 retourne 0 vulnérabilité, 0 secret et 0 mauvaise configuration sur le dépôt ;
 - les images Docker sont construites avec succès ; leur scan final reste à confirmer dans la prochaine CI.
 
@@ -317,11 +318,11 @@ sum(rate(collector_http_requests_total{route="/auth/login",status="401"}[5m])) >
 
 ### Journal de traitement
 
-| Date       | Risque | Action réalisée                                                                          | Preuve                                                        | Statut                         |
-| ---------- | ------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------ |
-| 05/07/2026 | SEC-01 | Scans bloquants, dépendances mises à jour et compilation avec Go 1.26.4                  | Tests Go réussis et scan Trivy du dépôt à 0 résultat bloquant | Validation CI attendue         |
-| 05/07/2026 | SEC-02 | Quality Gate obligatoire, action v6, organisation corrigée et secrets de test aléatoires | Tests Go réussis ; nouveau scan SonarCloud attendu            | Validation SonarCloud attendue |
-| 05/07/2026 | SEC-07 | `securityContext`, utilisateur non-root et volumes inscriptibles ajoutés                 | Trivy : 0 mauvaise configuration haute ou critique            | Validation K3s attendue        |
+| Date       | Risque | Action réalisée                                                                                | Preuve                                                     | Statut                         |
+| ---------- | ------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------ |
+| 05/07/2026 | SEC-01 | Scans bloquants, dépendances mises à jour, Go 1.26.4 et outils npm inutiles retirés du runtime | Tests réussis et scan Trivy du dépôt à 0 résultat bloquant | Validation CI attendue         |
+| 05/07/2026 | SEC-02 | Quality Gate obligatoire, action v6, organisation corrigée et secrets de test aléatoires       | Tests Go réussis ; nouveau scan SonarCloud attendu         | Validation SonarCloud attendue |
+| 05/07/2026 | SEC-07 | `securityContext`, utilisateur non-root et volumes inscriptibles ajoutés                       | Trivy : 0 mauvaise configuration haute ou critique         | Validation K3s attendue        |
 
 Pour passer une action à l'état **Corrigé**, il faut conserver :
 
