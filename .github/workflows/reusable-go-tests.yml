@@ -7,6 +7,27 @@ jobs:
   go-tests:
     name: Go Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: golang
+          POSTGRES_PASSWORD: golang
+          POSTGRES_DB: ecommerce
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U golang -d ecommerce"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_USER: golang
+      DB_PASSWORD: golang
+      DB_NAME: ecommerce
 
     steps:
       - name: Checkout repository

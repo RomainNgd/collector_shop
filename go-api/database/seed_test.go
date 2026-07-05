@@ -199,6 +199,9 @@ func openSeedTestDB(t *testing.T) *gorm.DB {
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("postgres is required in CI: %v", err)
+		}
 		t.Skipf("postgres not available: %v", err)
 	}
 
