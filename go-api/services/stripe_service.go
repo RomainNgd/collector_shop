@@ -160,7 +160,7 @@ func (s *StripeService) ConstructWebhookEvent(payload []byte, signature string) 
 
 	event, err := stripewebhook.ConstructEvent(payload, signature, s.webhookSecret)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrStripeInvalidWebhook, err)
+		return nil, fmt.Errorf(errorWrapFormat, ErrStripeInvalidWebhook, err)
 	}
 
 	result := &StripeWebhookEvent{
@@ -173,7 +173,7 @@ func (s *StripeService) ConstructWebhookEvent(payload []byte, signature string) 
 
 	var checkoutSession stripe.CheckoutSession
 	if err := json.Unmarshal(event.Data.Raw, &checkoutSession); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrStripeInvalidWebhook, err)
+		return nil, fmt.Errorf(errorWrapFormat, ErrStripeInvalidWebhook, err)
 	}
 
 	result.CheckoutSession = *mapStripeCheckoutSession(&checkoutSession)

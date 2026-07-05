@@ -21,6 +21,8 @@ import (
 //go:embed fixtures/demo.json fixtures/images/*
 var demoSeedFiles embed.FS
 
+const queryByName = "name = ?"
+
 type SeedReport struct {
 	CategoriesCreated int
 	CategoriesUpdated int
@@ -104,15 +106,37 @@ func SeedDemoData(db *gorm.DB, uploadDir string) (*SeedReport, error) {
 	}
 
 	report := &SeedReport{ImagesWritten: imagesWritten}
-	categoriesByName := make(map[string]*models.Category, len(fixtures.Categories))
+	categoriesByName, err := seedCategories(db, fixtures.Categories, report)
+	if err != nil {
+		return nil, err
+	}
+	if err := seedUsers(db, fixtures.Users, report); err != nil {
+		return nil, err
+	}
+	if err := seedProducts(db, fixtures.Products, categoriesByName, report); err != nil {
+		return nil, err
+	}
 
-	for _, categoryFixture := range fixtures.Categories {
-		category, created, updated, err := upsertCategory(db, categoryFixture)
+	productIDsByName, err := buildProductIDsByName(db, fixtures.Products)
+	if err != nil {
+		return nil, err
+	}
+	if err := seedPromotions(db, fixtures.Promotions, productIDsByName, report); err != nil {
+		return nil, err
+	}
+
+	return report, nil
+}
+
+func seedCategories(db *gorm.DB, fixtures []demoCategoryFixture, report *SeedReport) (map[string]*models.Category, error) {
+	categoriesByName := make(map[string]*models.Category, len(fixtures))
+	for _, fixture := range fixtures {
+		category, created, updated, err := upsertCategory(db, fixture)
 		if err != nil {
 			return nil, err
 		}
 
-		categoriesByName[categoryFixture.Name] = category
+		categoriesByName[fixture.Name] = category
 		if created {
 			report.CategoriesCreated++
 		}
@@ -120,13 +144,15 @@ func SeedDemoData(db *gorm.DB, uploadDir string) (*SeedReport, error) {
 			report.CategoriesUpdated++
 		}
 	}
+	return categoriesByName, nil
+}
 
-	for _, userFixture := range fixtures.Users {
-		created, updated, err := upsertUser(db, userFixture)
+func seedUsers(db *gorm.DB, fixtures []demoUserFixture, report *SeedReport) error {
+	for _, fixture := range fixtures {
+		created, updated, err := upsertUser(db, fixture)
 		if err != nil {
-			return nil, err
+			return err
 		}
-
 		if created {
 			report.UsersCreated++
 		}
@@ -134,18 +160,20 @@ func SeedDemoData(db *gorm.DB, uploadDir string) (*SeedReport, error) {
 			report.UsersUpdated++
 		}
 	}
+	return nil
+}
 
-	for _, productFixture := range fixtures.Products {
-		category := categoriesByName[productFixture.Category]
+func seedProducts(db *gorm.DB, fixtures []demoProductFixture, categories map[string]*models.Category, report *SeedReport) error {
+	for _, fixture := range fixtures {
+		category := categories[fixture.Category]
 		if category == nil {
-			return nil, fmt.Errorf("fixture category %q not found for product %q", productFixture.Category, productFixture.Name)
+			return fmt.Errorf("fixture category %q not found for product %q", fixture.Category, fixture.Name)
 		}
 
-		created, updated, err := upsertProduct(db, productFixture, category.ID)
+		created, updated, err := upsertProduct(db, fixture, category.ID)
 		if err != nil {
-			return nil, err
+			return err
 		}
-
 		if created {
 			report.ProductsCreated++
 		}
@@ -153,18 +181,15 @@ func SeedDemoData(db *gorm.DB, uploadDir string) (*SeedReport, error) {
 			report.ProductsUpdated++
 		}
 	}
+	return nil
+}
 
-	productIDsByName, err := buildProductIDsByName(db, fixtures.Products)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, promotionFixture := range fixtures.Promotions {
-		created, updated, err := upsertPromotion(db, promotionFixture, productIDsByName)
+func seedPromotions(db *gorm.DB, fixtures []demoPromotionFixture, productIDs map[string]uint, report *SeedReport) error {
+	for _, fixture := range fixtures {
+		created, updated, err := upsertPromotion(db, fixture, productIDs)
 		if err != nil {
-			return nil, err
+			return err
 		}
-
 		if created {
 			report.PromotionsCreated++
 		}
@@ -172,8 +197,7 @@ func SeedDemoData(db *gorm.DB, uploadDir string) (*SeedReport, error) {
 			report.PromotionsUpdated++
 		}
 	}
-
-	return report, nil
+	return nil
 }
 
 func loadDemoFixtures() (*demoFixtures, error) {
@@ -195,6 +219,29 @@ func loadDemoFixtures() (*demoFixtures, error) {
 }
 
 func validateDemoFixtures(fixtures *demoFixtures) error {
+	if err := validateFixtureCollections(fixtures); err != nil {
+		return err
+	}
+
+	availableImages, err := availableDemoImages()
+	if err != nil {
+		return err
+	}
+	categoryNames, err := validateCategoryFixtures(fixtures.Categories)
+	if err != nil {
+		return err
+	}
+	productNames, err := validateProductFixtures(fixtures.Products, categoryNames, availableImages)
+	if err != nil {
+		return err
+	}
+	if err := validatePromotionFixtures(fixtures.Promotions, productNames); err != nil {
+		return err
+	}
+	return validateUserFixtures(fixtures.Users)
+}
+
+func validateFixtureCollections(fixtures *demoFixtures) error {
 	if len(fixtures.Categories) == 0 {
 		return errors.New("demo fixtures must include at least one category")
 	}
@@ -207,10 +254,13 @@ func validateDemoFixtures(fixtures *demoFixtures) error {
 	if len(fixtures.Users) == 0 {
 		return errors.New("demo fixtures must include at least one user")
 	}
+	return nil
+}
 
+func availableDemoImages() (map[string]struct{}, error) {
 	imageEntries, err := demoSeedFiles.ReadDir("fixtures/images")
 	if err != nil {
-		return fmt.Errorf("failed to list demo images: %w", err)
+		return nil, fmt.Errorf("failed to list demo images: %w", err)
 	}
 
 	availableImages := make(map[string]struct{}, len(imageEntries))
@@ -220,104 +270,150 @@ func validateDemoFixtures(fixtures *demoFixtures) error {
 		}
 		availableImages[entry.Name()] = struct{}{}
 	}
+	return availableImages, nil
+}
 
-	categoryNames := make(map[string]struct{}, len(fixtures.Categories))
-	for _, category := range fixtures.Categories {
-		if strings.TrimSpace(category.Name) == "" {
-			return errors.New("fixture category name cannot be empty")
-		}
-		if strings.TrimSpace(category.Description) == "" {
-			return fmt.Errorf("fixture category %q must include a description", category.Name)
-		}
-		if _, exists := categoryNames[category.Name]; exists {
-			return fmt.Errorf("fixture category %q is duplicated", category.Name)
+func validateCategoryFixtures(fixtures []demoCategoryFixture) (map[string]struct{}, error) {
+	categoryNames := make(map[string]struct{}, len(fixtures))
+	for _, category := range fixtures {
+		if err := validateCategoryFixture(category, categoryNames); err != nil {
+			return nil, err
 		}
 		categoryNames[category.Name] = struct{}{}
 	}
+	return categoryNames, nil
+}
 
-	productNames := make(map[string]struct{}, len(fixtures.Products))
-	for _, product := range fixtures.Products {
-		if strings.TrimSpace(product.Name) == "" {
-			return errors.New("fixture product name cannot be empty")
-		}
-		if strings.TrimSpace(product.Description) == "" {
-			return fmt.Errorf("fixture product %q must include a description", product.Name)
-		}
-		if strings.TrimSpace(product.Image) == "" {
-			return fmt.Errorf("fixture product %q must include an image", product.Name)
-		}
-		if filepath.Base(product.Image) != product.Image {
-			return fmt.Errorf("fixture product %q has invalid image filename %q", product.Name, product.Image)
-		}
-		if product.Price <= 0 {
-			return fmt.Errorf("fixture product %q must include a positive price", product.Name)
-		}
-		if _, exists := categoryNames[product.Category]; !exists {
-			return fmt.Errorf("fixture product %q references unknown category %q", product.Name, product.Category)
-		}
-		if _, exists := availableImages[product.Image]; !exists {
-			return fmt.Errorf("fixture product %q references missing image %q", product.Name, product.Image)
-		}
-		if _, exists := productNames[product.Name]; exists {
-			return fmt.Errorf("fixture product %q is duplicated", product.Name)
+func validateCategoryFixture(category demoCategoryFixture, categoryNames map[string]struct{}) error {
+	if strings.TrimSpace(category.Name) == "" {
+		return errors.New("fixture category name cannot be empty")
+	}
+	if strings.TrimSpace(category.Description) == "" {
+		return fmt.Errorf("fixture category %q must include a description", category.Name)
+	}
+	if _, exists := categoryNames[category.Name]; exists {
+		return fmt.Errorf("fixture category %q is duplicated", category.Name)
+	}
+	return nil
+}
+
+func validateProductFixtures(fixtures []demoProductFixture, categoryNames, availableImages map[string]struct{}) (map[string]struct{}, error) {
+	productNames := make(map[string]struct{}, len(fixtures))
+	for _, product := range fixtures {
+		if err := validateProductFixture(product, categoryNames, availableImages, productNames); err != nil {
+			return nil, err
 		}
 		productNames[product.Name] = struct{}{}
 	}
+	return productNames, nil
+}
 
-	promotionNames := make(map[string]struct{}, len(fixtures.Promotions))
-	for _, promotion := range fixtures.Promotions {
-		if strings.TrimSpace(promotion.Name) == "" {
-			return errors.New("fixture promotion name cannot be empty")
-		}
-		if promotion.Type != models.PromotionTypePercentage && promotion.Type != models.PromotionTypeFixed {
-			return fmt.Errorf("fixture promotion %q has invalid type %q", promotion.Name, promotion.Type)
-		}
-		if promotion.Value <= 0 {
-			return fmt.Errorf("fixture promotion %q must include a positive value", promotion.Name)
-		}
-		if promotion.Type == models.PromotionTypePercentage && promotion.Value > 100 {
-			return fmt.Errorf("fixture promotion %q percentage cannot exceed 100", promotion.Name)
-		}
-		if !promotion.AppliesToAll && len(promotion.Products) == 0 {
-			return fmt.Errorf("fixture promotion %q must target at least one product", promotion.Name)
-		}
-		seenProducts := make(map[string]struct{}, len(promotion.Products))
-		for _, productName := range promotion.Products {
-			trimmedName := strings.TrimSpace(productName)
-			if trimmedName == "" {
-				return fmt.Errorf("fixture promotion %q contains an empty product reference", promotion.Name)
-			}
-			if _, exists := productNames[trimmedName]; !exists {
-				return fmt.Errorf("fixture promotion %q references unknown product %q", promotion.Name, trimmedName)
-			}
-			if _, exists := seenProducts[trimmedName]; exists {
-				return fmt.Errorf("fixture promotion %q references duplicate product %q", promotion.Name, trimmedName)
-			}
-			seenProducts[trimmedName] = struct{}{}
-		}
-		if _, exists := promotionNames[promotion.Name]; exists {
-			return fmt.Errorf("fixture promotion %q is duplicated", promotion.Name)
+func validateProductFixture(product demoProductFixture, categoryNames, availableImages, productNames map[string]struct{}) error {
+	if strings.TrimSpace(product.Name) == "" {
+		return errors.New("fixture product name cannot be empty")
+	}
+	if strings.TrimSpace(product.Description) == "" {
+		return fmt.Errorf("fixture product %q must include a description", product.Name)
+	}
+	if strings.TrimSpace(product.Image) == "" {
+		return fmt.Errorf("fixture product %q must include an image", product.Name)
+	}
+	if filepath.Base(product.Image) != product.Image {
+		return fmt.Errorf("fixture product %q has invalid image filename %q", product.Name, product.Image)
+	}
+	if product.Price <= 0 {
+		return fmt.Errorf("fixture product %q must include a positive price", product.Name)
+	}
+	if _, exists := categoryNames[product.Category]; !exists {
+		return fmt.Errorf("fixture product %q references unknown category %q", product.Name, product.Category)
+	}
+	if _, exists := availableImages[product.Image]; !exists {
+		return fmt.Errorf("fixture product %q references missing image %q", product.Name, product.Image)
+	}
+	if _, exists := productNames[product.Name]; exists {
+		return fmt.Errorf("fixture product %q is duplicated", product.Name)
+	}
+	return nil
+}
+
+func validatePromotionFixtures(fixtures []demoPromotionFixture, productNames map[string]struct{}) error {
+	promotionNames := make(map[string]struct{}, len(fixtures))
+	for _, promotion := range fixtures {
+		if err := validatePromotionFixture(promotion, productNames, promotionNames); err != nil {
+			return err
 		}
 		promotionNames[promotion.Name] = struct{}{}
 	}
+	return nil
+}
 
-	userEmails := make(map[string]struct{}, len(fixtures.Users))
-	for _, user := range fixtures.Users {
-		if strings.TrimSpace(user.Email) == "" {
-			return errors.New("fixture user email cannot be empty")
+func validatePromotionFixture(promotion demoPromotionFixture, productNames, promotionNames map[string]struct{}) error {
+	if strings.TrimSpace(promotion.Name) == "" {
+		return errors.New("fixture promotion name cannot be empty")
+	}
+	if promotion.Type != models.PromotionTypePercentage && promotion.Type != models.PromotionTypeFixed {
+		return fmt.Errorf("fixture promotion %q has invalid type %q", promotion.Name, promotion.Type)
+	}
+	if promotion.Value <= 0 {
+		return fmt.Errorf("fixture promotion %q must include a positive value", promotion.Name)
+	}
+	if promotion.Type == models.PromotionTypePercentage && promotion.Value > 100 {
+		return fmt.Errorf("fixture promotion %q percentage cannot exceed 100", promotion.Name)
+	}
+	if !promotion.AppliesToAll && len(promotion.Products) == 0 {
+		return fmt.Errorf("fixture promotion %q must target at least one product", promotion.Name)
+	}
+	if err := validatePromotionProductReferences(promotion, productNames); err != nil {
+		return err
+	}
+	if _, exists := promotionNames[promotion.Name]; exists {
+		return fmt.Errorf("fixture promotion %q is duplicated", promotion.Name)
+	}
+	return nil
+}
+
+func validatePromotionProductReferences(promotion demoPromotionFixture, productNames map[string]struct{}) error {
+	seenProducts := make(map[string]struct{}, len(promotion.Products))
+	for _, productName := range promotion.Products {
+		trimmedName := strings.TrimSpace(productName)
+		if trimmedName == "" {
+			return fmt.Errorf("fixture promotion %q contains an empty product reference", promotion.Name)
 		}
-		if strings.TrimSpace(user.Password) == "" {
-			return fmt.Errorf("fixture user %q must include a password", user.Email)
+		if _, exists := productNames[trimmedName]; !exists {
+			return fmt.Errorf("fixture promotion %q references unknown product %q", promotion.Name, trimmedName)
 		}
-		if user.Role != constants.RoleAdmin && user.Role != constants.RoleUser {
-			return fmt.Errorf("fixture user %q has invalid role %q", user.Email, user.Role)
+		if _, exists := seenProducts[trimmedName]; exists {
+			return fmt.Errorf("fixture promotion %q references duplicate product %q", promotion.Name, trimmedName)
 		}
-		if _, exists := userEmails[user.Email]; exists {
-			return fmt.Errorf("fixture user %q is duplicated", user.Email)
+		seenProducts[trimmedName] = struct{}{}
+	}
+	return nil
+}
+
+func validateUserFixtures(fixtures []demoUserFixture) error {
+	userEmails := make(map[string]struct{}, len(fixtures))
+	for _, user := range fixtures {
+		if err := validateUserFixture(user, userEmails); err != nil {
+			return err
 		}
 		userEmails[user.Email] = struct{}{}
 	}
+	return nil
+}
 
+func validateUserFixture(user demoUserFixture, userEmails map[string]struct{}) error {
+	if strings.TrimSpace(user.Email) == "" {
+		return errors.New("fixture user email cannot be empty")
+	}
+	if strings.TrimSpace(user.Password) == "" {
+		return fmt.Errorf("fixture user %q must include a password", user.Email)
+	}
+	if user.Role != constants.RoleAdmin && user.Role != constants.RoleUser {
+		return fmt.Errorf("fixture user %q has invalid role %q", user.Email, user.Role)
+	}
+	if _, exists := userEmails[user.Email]; exists {
+		return fmt.Errorf("fixture user %q is duplicated", user.Email)
+	}
 	return nil
 }
 
@@ -367,7 +463,7 @@ func writeDemoImage(uploadDir, imageName string) (bool, error) {
 
 func upsertCategory(db *gorm.DB, fixture demoCategoryFixture) (*models.Category, bool, bool, error) {
 	var category models.Category
-	result := db.Where("name = ?", fixture.Name).Limit(1).Find(&category)
+	result := db.Where(queryByName, fixture.Name).Limit(1).Find(&category)
 	if result.Error != nil {
 		return nil, false, false, fmt.Errorf("failed to fetch fixture category %q: %w", fixture.Name, result.Error)
 	}
@@ -445,7 +541,7 @@ func upsertUser(db *gorm.DB, fixture demoUserFixture) (bool, bool, error) {
 
 func upsertProduct(db *gorm.DB, fixture demoProductFixture, categoryID uint) (bool, bool, error) {
 	var product models.Product
-	result := db.Where("name = ?", fixture.Name).Limit(1).Find(&product)
+	result := db.Where(queryByName, fixture.Name).Limit(1).Find(&product)
 	if result.Error != nil {
 		return false, false, fmt.Errorf("failed to fetch fixture product %q: %w", fixture.Name, result.Error)
 	}
@@ -514,55 +610,21 @@ func buildProductIDsByName(db *gorm.DB, fixtures []demoProductFixture) (map[stri
 
 func upsertPromotion(db *gorm.DB, fixture demoPromotionFixture, productIDsByName map[string]uint) (bool, bool, error) {
 	var promotion models.Promotion
-	result := db.Where("name = ?", fixture.Name).Limit(1).Find(&promotion)
+	result := db.Where(queryByName, fixture.Name).Limit(1).Find(&promotion)
 	if result.Error != nil {
 		return false, false, fmt.Errorf("failed to fetch fixture promotion %q: %w", fixture.Name, result.Error)
 	}
 
-	productIDs := make([]uint, 0, len(fixture.Products))
-	for _, productName := range fixture.Products {
-		productID, exists := productIDsByName[productName]
-		if !exists {
-			return false, false, fmt.Errorf("fixture promotion %q references unresolved product %q", fixture.Name, productName)
-		}
-		productIDs = append(productIDs, productID)
+	productIDs, err := resolvePromotionProductIDs(fixture, productIDsByName)
+	if err != nil {
+		return false, false, err
 	}
 
 	if result.RowsAffected == 0 {
-		promotion = models.Promotion{
-			Name:         fixture.Name,
-			Description:  fixture.Description,
-			Type:         fixture.Type,
-			Value:        fixture.Value,
-			IsActive:     fixture.IsActive,
-			AppliesToAll: fixture.AppliesToAll,
-		}
-		if err := db.Create(&promotion).Error; err != nil {
-			return false, false, fmt.Errorf("failed to create fixture promotion %q: %w", fixture.Name, err)
-		}
-		if err := replacePromotionProducts(db, &promotion, productIDs); err != nil {
-			return false, false, err
-		}
-		return true, false, nil
+		return createFixturePromotion(db, fixture, productIDs)
 	}
 
-	updates := make(map[string]interface{})
-	if promotion.Description != fixture.Description {
-		updates["description"] = fixture.Description
-	}
-	if promotion.Type != fixture.Type {
-		updates["type"] = fixture.Type
-	}
-	if promotion.Value != fixture.Value {
-		updates["value"] = fixture.Value
-	}
-	if promotion.IsActive != fixture.IsActive {
-		updates["is_active"] = fixture.IsActive
-	}
-	if promotion.AppliesToAll != fixture.AppliesToAll {
-		updates["applies_to_all"] = fixture.AppliesToAll
-	}
-
+	updates := promotionFixtureUpdates(&promotion, fixture)
 	linksChanged, err := promotionLinksChanged(db, &promotion, productIDs)
 	if err != nil {
 		return false, false, err
@@ -585,6 +647,56 @@ func upsertPromotion(db *gorm.DB, fixture demoPromotionFixture, productIDsByName
 	}
 
 	return false, true, nil
+}
+
+func resolvePromotionProductIDs(fixture demoPromotionFixture, productIDsByName map[string]uint) ([]uint, error) {
+	productIDs := make([]uint, 0, len(fixture.Products))
+	for _, productName := range fixture.Products {
+		productID, exists := productIDsByName[productName]
+		if !exists {
+			return nil, fmt.Errorf("fixture promotion %q references unresolved product %q", fixture.Name, productName)
+		}
+		productIDs = append(productIDs, productID)
+	}
+	return productIDs, nil
+}
+
+func createFixturePromotion(db *gorm.DB, fixture demoPromotionFixture, productIDs []uint) (bool, bool, error) {
+	promotion := models.Promotion{
+		Name:         fixture.Name,
+		Description:  fixture.Description,
+		Type:         fixture.Type,
+		Value:        fixture.Value,
+		IsActive:     fixture.IsActive,
+		AppliesToAll: fixture.AppliesToAll,
+	}
+	if err := db.Create(&promotion).Error; err != nil {
+		return false, false, fmt.Errorf("failed to create fixture promotion %q: %w", fixture.Name, err)
+	}
+	if err := replacePromotionProducts(db, &promotion, productIDs); err != nil {
+		return false, false, err
+	}
+	return true, false, nil
+}
+
+func promotionFixtureUpdates(promotion *models.Promotion, fixture demoPromotionFixture) map[string]interface{} {
+	updates := make(map[string]interface{})
+	if promotion.Description != fixture.Description {
+		updates["description"] = fixture.Description
+	}
+	if promotion.Type != fixture.Type {
+		updates["type"] = fixture.Type
+	}
+	if promotion.Value != fixture.Value {
+		updates["value"] = fixture.Value
+	}
+	if promotion.IsActive != fixture.IsActive {
+		updates["is_active"] = fixture.IsActive
+	}
+	if promotion.AppliesToAll != fixture.AppliesToAll {
+		updates["applies_to_all"] = fixture.AppliesToAll
+	}
+	return updates
 }
 
 func replacePromotionProducts(db *gorm.DB, promotion *models.Promotion, productIDs []uint) error {

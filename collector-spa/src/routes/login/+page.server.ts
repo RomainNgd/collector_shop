@@ -5,6 +5,7 @@ import {
 	readApiResponse
 } from '$lib/server/api';
 import { claimsToUser, decodeJwtPayload } from '$lib/server/jwt';
+import { getFormString } from '$lib/server/forms';
 import { ADMIN_ROLE } from '$lib/types';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -38,8 +39,8 @@ export const load: PageServerLoad = ({ locals, cookies }) => {
 export const actions: Actions = {
 	default: async ({ request, fetch, cookies, url }) => {
 		const formData = await request.formData();
-		const email = String(formData.get('email') ?? '').trim();
-		const password = String(formData.get('password') ?? '');
+		const email = getFormString(formData, 'email').trim();
+		const password = getFormString(formData, 'password');
 
 		if (!email || !password) {
 			return fail(400, {

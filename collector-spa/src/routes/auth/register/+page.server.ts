@@ -1,4 +1,5 @@
 import { buildApiHeaders, buildInternalApiPath, readApiResponse } from '$lib/server/api';
+import { getFormString } from '$lib/server/forms';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -14,6 +15,18 @@ type RegisterApiResponse = {
 	};
 };
 
+const getRegistrationError = (status: number): string => {
+	if (status === 409) {
+		return 'Cette adresse email est deja utilisee';
+	}
+
+	if (status === 400) {
+		return 'Verifie ton email et utilise un mot de passe de 8 caracteres minimum';
+	}
+
+	return 'Impossible de creer le compte pour le moment';
+};
+
 export const load: PageServerLoad = ({ locals }) => {
 	if (locals.user) {
 		redirect(303, '/');
@@ -23,9 +36,9 @@ export const load: PageServerLoad = ({ locals }) => {
 export const actions: Actions = {
 	default: async ({ request, fetch, cookies, url }) => {
 		const formData = await request.formData();
-		const email = String(formData.get('email') ?? '').trim();
-		const password = String(formData.get('password') ?? '');
-		const confirmPassword = String(formData.get('confirmPassword') ?? '');
+		const email = getFormString(formData, 'email').trim();
+		const password = getFormString(formData, 'password');
+		const confirmPassword = getFormString(formData, 'confirmPassword');
 
 		if (!email || !password || !confirmPassword) {
 			return fail(400, {
@@ -57,15 +70,8 @@ export const actions: Actions = {
 		const result = await readApiResponse<RegisterApiResponse['data']>(response);
 
 		if (!response.ok || result.payload?.success !== true) {
-			const errorMessage =
-				response.status === 409
-					? 'Cette adresse email est deja utilisee'
-					: response.status === 400
-						? 'Verifie ton email et utilise un mot de passe de 8 caracteres minimum'
-						: 'Impossible de creer le compte pour le moment';
-
 			return fail(response.status, {
-				error: errorMessage,
+				error: getRegistrationError(response.status),
 				email
 			});
 		}

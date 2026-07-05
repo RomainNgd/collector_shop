@@ -26,7 +26,11 @@ export const getPromotionBadgeLabel = (promotion: PromotionSummary | null) =>
 
 export const formatPromotionScope = (
 	promotion: Pick<Promotion, 'appliesToAll' | 'productCount'>
-) =>
-	promotion.appliesToAll
-		? 'Globale'
-		: `${promotion.productCount} produit${promotion.productCount > 1 ? 's' : ''}`;
+) => {
+	if (promotion.appliesToAll) {
+		return 'Globale';
+	}
+
+	const suffix = promotion.productCount > 1 ? 's' : '';
+	return `${promotion.productCount} produit${suffix}`;
+};

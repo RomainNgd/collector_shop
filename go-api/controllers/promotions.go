@@ -39,14 +39,14 @@ func (h *PromotionHandler) FindOnePromotion(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid promotion ID", nil)
+		RespondError(c, http.StatusBadRequest, "INVALID_ID", errorInvalidPromotionID, nil)
 		return
 	}
 
 	promotion, err := h.promotionService.GetPromotionByID(ctx, uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusNotFound, "PROMOTION_NOT_FOUND", "Promotion not found", nil)
+			RespondError(c, http.StatusNotFound, "PROMOTION_NOT_FOUND", errorPromotionNotFound, nil)
 			return
 		}
 		logger.Error("Failed to fetch promotion %d: %v", id, err)
@@ -62,7 +62,7 @@ func (h *PromotionHandler) CreatePromotion(c *gin.Context) {
 
 	var req CreatePromotionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", errorInvalidRequestPayload, err.Error())
 		return
 	}
 
@@ -76,7 +76,7 @@ func (h *PromotionHandler) CreatePromotion(c *gin.Context) {
 		ProductIDs:   req.ProductIDs,
 	})
 	if err != nil {
-		if handled := handlePromotionError(c, err, "create", 0); handled {
+		if handlePromotionError(c, err) {
 			return
 		}
 		logger.Error("Failed to create promotion: %v", err)
@@ -92,13 +92,13 @@ func (h *PromotionHandler) UpdatePromotion(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid promotion ID", nil)
+		RespondError(c, http.StatusBadRequest, "INVALID_ID", errorInvalidPromotionID, nil)
 		return
 	}
 
 	var req UpdatePromotionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", errorInvalidRequestPayload, err.Error())
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *PromotionHandler) UpdatePromotion(c *gin.Context) {
 		ProductIDs:   req.ProductIDs,
 	})
 	if err != nil {
-		if handled := handlePromotionError(c, err, "update", uint(id)); handled {
+		if handlePromotionError(c, err) {
 			return
 		}
 		logger.Error("Failed to update promotion %d: %v", id, err)
@@ -128,13 +128,13 @@ func (h *PromotionHandler) DeletePromotion(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid promotion ID", nil)
+		RespondError(c, http.StatusBadRequest, "INVALID_ID", errorInvalidPromotionID, nil)
 		return
 	}
 
 	if err := h.promotionService.DeletePromotion(ctx, uint(id)); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusNotFound, "PROMOTION_NOT_FOUND", "Promotion not found", nil)
+			RespondError(c, http.StatusNotFound, "PROMOTION_NOT_FOUND", errorPromotionNotFound, nil)
 			return
 		}
 		logger.Error("Failed to delete promotion %d: %v", id, err)
@@ -149,10 +149,10 @@ func dereferenceBool(value *bool) bool {
 	return value != nil && *value
 }
 
-func handlePromotionError(c *gin.Context, err error, action string, id uint) bool {
+func handlePromotionError(c *gin.Context, err error) bool {
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
-		RespondError(c, http.StatusNotFound, "PROMOTION_NOT_FOUND", "Promotion not found", nil)
+		RespondError(c, http.StatusNotFound, "PROMOTION_NOT_FOUND", errorPromotionNotFound, nil)
 		return true
 	case errors.Is(err, services.ErrInvalidPromotionType):
 		RespondError(c, http.StatusBadRequest, "INVALID_PROMOTION_TYPE", "Promotion type is invalid", nil)
@@ -167,8 +167,6 @@ func handlePromotionError(c *gin.Context, err error, action string, id uint) boo
 		RespondError(c, http.StatusBadRequest, "PROMOTION_PRODUCTS_NOT_FOUND", "Some selected products do not exist", nil)
 		return true
 	default:
-		_ = action
-		_ = id
 		return false
 	}
 }

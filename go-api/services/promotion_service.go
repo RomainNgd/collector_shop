@@ -135,47 +135,66 @@ func (s *PromotionService) UpdatePromotion(ctx context.Context, id uint, input P
 
 	var updated *models.Promotion
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var promotion models.Promotion
-		if err := tx.WithContext(ctx).First(&promotion, id).Error; err != nil {
-			return err
-		}
-
-		products, err := s.loadPromotionProducts(ctx, tx, input.AppliesToAll, productIDs)
-		if err != nil {
-			return err
-		}
-
-		updates := map[string]interface{}{
-			"name":           input.Name,
-			"description":    input.Description,
-			"type":           input.Type,
-			"value":          roundCurrency(input.Value),
-			"is_active":      input.IsActive,
-			"applies_to_all": input.AppliesToAll,
-		}
-
-		if err := tx.WithContext(ctx).Model(&promotion).Updates(updates).Error; err != nil {
-			return fmt.Errorf("failed to update promotion: %w", err)
-		}
-
-		if input.AppliesToAll {
-			if err := tx.WithContext(ctx).Model(&promotion).Association("Products").Clear(); err != nil {
-				return fmt.Errorf("failed to clear promotion products: %w", err)
-			}
-		} else {
-			if err := tx.WithContext(ctx).Model(&promotion).Association("Products").Replace(products); err != nil {
-				return fmt.Errorf("failed to update promotion products: %w", err)
-			}
-		}
-
-		updated, err = s.loadPromotion(ctx, tx, id)
-		return err
+		var transactionErr error
+		updated, transactionErr = s.updatePromotion(ctx, tx, id, input, productIDs)
+		return transactionErr
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return updated, nil
+}
+
+func (s *PromotionService) updatePromotion(
+	ctx context.Context,
+	tx *gorm.DB,
+	id uint,
+	input PromotionInput,
+	productIDs []uint,
+) (*models.Promotion, error) {
+	var promotion models.Promotion
+	if err := tx.WithContext(ctx).First(&promotion, id).Error; err != nil {
+		return nil, err
+	}
+
+	products, err := s.loadPromotionProducts(ctx, tx, input.AppliesToAll, productIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	updates := map[string]interface{}{
+		"name":           input.Name,
+		"description":    input.Description,
+		"type":           input.Type,
+		"value":          roundCurrency(input.Value),
+		"is_active":      input.IsActive,
+		"applies_to_all": input.AppliesToAll,
+	}
+	if err := tx.WithContext(ctx).Model(&promotion).Updates(updates).Error; err != nil {
+		return nil, fmt.Errorf("failed to update promotion: %w", err)
+	}
+
+	if err := replacePromotionProducts(ctx, tx, &promotion, products, input.AppliesToAll); err != nil {
+		return nil, err
+	}
+
+	return s.loadPromotion(ctx, tx, id)
+}
+
+func replacePromotionProducts(ctx context.Context, tx *gorm.DB, promotion *models.Promotion, products []models.Product, appliesToAll bool) error {
+	association := tx.WithContext(ctx).Model(promotion).Association("Products")
+	if appliesToAll {
+		if err := association.Clear(); err != nil {
+			return fmt.Errorf("failed to clear promotion products: %w", err)
+		}
+		return nil
+	}
+
+	if err := association.Replace(products); err != nil {
+		return fmt.Errorf("failed to update promotion products: %w", err)
+	}
+	return nil
 }
 
 func (s *PromotionService) DeletePromotion(ctx context.Context, id uint) error {

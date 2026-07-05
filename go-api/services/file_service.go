@@ -15,7 +15,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const imageHeaderBytes = 12
+const (
+	imageHeaderBytes = 12
+	errorWrapFormat  = "%w: %v"
+)
 
 var (
 	ErrFileTooLarge      = errors.New("file size exceeds maximum allowed")
@@ -61,14 +64,14 @@ func (s *FileService) SaveImage(file *multipart.FileHeader) (string, error) {
 
 	src, err := file.Open()
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrFileUploadFailed, err)
+		return "", fmt.Errorf(errorWrapFormat, ErrFileUploadFailed, err)
 	}
 	defer src.Close()
 
 	header := make([]byte, imageHeaderBytes)
 	n, err := io.ReadFull(src, header)
 	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
-		return "", fmt.Errorf("%w: %v", ErrFileUploadFailed, err)
+		return "", fmt.Errorf(errorWrapFormat, ErrFileUploadFailed, err)
 	}
 	header = header[:n]
 
@@ -77,18 +80,18 @@ func (s *FileService) SaveImage(file *multipart.FileHeader) (string, error) {
 	}
 
 	if _, err := src.Seek(0, io.SeekStart); err != nil {
-		return "", fmt.Errorf("%w: %v", ErrFileUploadFailed, err)
+		return "", fmt.Errorf(errorWrapFormat, ErrFileUploadFailed, err)
 	}
 
 	dst, err := os.Create(filePath)
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrFileUploadFailed, err)
+		return "", fmt.Errorf(errorWrapFormat, ErrFileUploadFailed, err)
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, src); err != nil {
 		os.Remove(filePath)
-		return "", fmt.Errorf("%w: %v", ErrFileUploadFailed, err)
+		return "", fmt.Errorf(errorWrapFormat, ErrFileUploadFailed, err)
 	}
 
 	return filename, nil

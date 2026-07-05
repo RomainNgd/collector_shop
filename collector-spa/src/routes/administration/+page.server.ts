@@ -12,6 +12,7 @@ import {
 	readApiResponse
 } from '$lib/server/api';
 import { loadAdminData, requireAdmin } from '$lib/server/admin';
+import { getFormString, getFormStrings } from '$lib/server/forms';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -132,14 +133,14 @@ const extractEntityId = (
 
 const readProductForm = async (request: Request): Promise<ParsedProductForm> => {
 	const formData = await request.formData();
-	const id = String(formData.get('id') ?? '').trim();
-	const name = String(formData.get('name') ?? '').trim();
-	const description = String(formData.get('description') ?? '').trim();
-	const priceValue = String(formData.get('price') ?? '').trim();
-	const categoryId = String(formData.get('category_id') ?? '').trim();
-	const currentImageName = String(formData.get('currentImageName') ?? '').trim();
+	const id = getFormString(formData, 'id').trim();
+	const name = getFormString(formData, 'name').trim();
+	const description = getFormString(formData, 'description').trim();
+	const priceValue = getFormString(formData, 'price').trim();
+	const categoryId = getFormString(formData, 'category_id').trim();
+	const currentImageName = getFormString(formData, 'currentImageName').trim();
 	const imageFile = getImageFile(formData.get('image'));
-	const removeImage = String(formData.get('removeImage') ?? '') === 'true';
+	const removeImage = getFormString(formData, 'removeImage') === 'true';
 
 	return {
 		id,
@@ -160,9 +161,9 @@ const readProductForm = async (request: Request): Promise<ParsedProductForm> => 
 
 const readCategoryForm = async (request: Request) => {
 	const formData = await request.formData();
-	const id = String(formData.get('id') ?? '').trim();
-	const name = String(formData.get('name') ?? '').trim();
-	const description = String(formData.get('description') ?? '').trim();
+	const id = getFormString(formData, 'id').trim();
+	const name = getFormString(formData, 'name').trim();
+	const description = getFormString(formData, 'description').trim();
 
 	return {
 		id,
@@ -176,17 +177,16 @@ const readCategoryForm = async (request: Request) => {
 
 const readPromotionForm = async (request: Request): Promise<ParsedPromotionForm> => {
 	const formData = await request.formData();
-	const id = String(formData.get('id') ?? '').trim();
-	const name = String(formData.get('name') ?? '').trim();
-	const description = String(formData.get('description') ?? '').trim();
-	const type = String(formData.get('type') ?? '').trim();
-	const valueText = String(formData.get('value') ?? '').trim();
-	const isActive = String(formData.get('is_active') ?? 'false') === 'true' ? 'true' : 'false';
+	const id = getFormString(formData, 'id').trim();
+	const name = getFormString(formData, 'name').trim();
+	const description = getFormString(formData, 'description').trim();
+	const type = getFormString(formData, 'type').trim();
+	const valueText = getFormString(formData, 'value').trim();
+	const isActive = getFormString(formData, 'is_active', 'false') === 'true' ? 'true' : 'false';
 	const appliesToAll =
-		String(formData.get('applies_to_all') ?? 'false') === 'true' ? 'true' : 'false';
-	const rawProductIds = formData
-		.getAll('product_ids')
-		.map((entry) => String(entry).trim())
+		getFormString(formData, 'applies_to_all', 'false') === 'true' ? 'true' : 'false';
+	const rawProductIds = getFormStrings(formData, 'product_ids')
+		.map((entry) => entry.trim())
 		.filter((entry) => entry !== '');
 
 	return {
@@ -202,9 +202,7 @@ const readPromotionForm = async (request: Request): Promise<ParsedPromotionForm>
 			productIds: rawProductIds
 		},
 		value: Number(valueText),
-		productIds: rawProductIds
-			.map((entry) => Number(entry))
-			.filter((entry) => Number.isInteger(entry) && entry > 0)
+		productIds: rawProductIds.map(Number).filter((entry) => Number.isInteger(entry) && entry > 0)
 	};
 };
 
@@ -470,7 +468,7 @@ export const actions: Actions = {
 	deleteProduct: async ({ request, fetch, locals }) => {
 		requireAdmin(locals.user);
 
-		const productId = String((await request.formData()).get('id') ?? '').trim();
+		const productId = getFormString(await request.formData(), 'id').trim();
 
 		if (!productId) {
 			return failAdminAction(400, 'delete-product', 'Produit introuvable', {
@@ -569,7 +567,7 @@ export const actions: Actions = {
 	deleteCategory: async ({ request, fetch, locals }) => {
 		requireAdmin(locals.user);
 
-		const categoryId = String((await request.formData()).get('id') ?? '').trim();
+		const categoryId = getFormString(await request.formData(), 'id').trim();
 		if (!categoryId) {
 			return failAdminAction(400, 'delete-category', 'Categorie introuvable', {
 				categoryId
@@ -678,7 +676,7 @@ export const actions: Actions = {
 	deletePromotion: async ({ request, fetch, locals }) => {
 		requireAdmin(locals.user);
 
-		const promotionId = String((await request.formData()).get('id') ?? '').trim();
+		const promotionId = getFormString(await request.formData(), 'id').trim();
 		if (!promotionId) {
 			return failAdminAction(400, 'delete-promotion', 'Promotion introuvable', {
 				promotionId

@@ -53,29 +53,8 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID uint, items []Ord
 
 	var createdOrder models.Order
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		productIDs := make([]uint, 0, len(normalizedItems))
-		for _, item := range normalizedItems {
-			productIDs = append(productIDs, item.ProductID)
-		}
-
-		var products []models.Product
-		if err := tx.Preload("Category").Preload("Promotions").Where("id IN ?", productIDs).Find(&products).Error; err != nil {
-			return fmt.Errorf("failed to fetch order products: %w", err)
-		}
-
-		if len(products) != len(productIDs) {
-			return ErrOrderProductNotFound
-		}
-
-		productPointers := make([]*models.Product, 0, len(products))
-		productByID := make(map[uint]*models.Product, len(products))
-		for i := range products {
-			product := &products[i]
-			productPointers = append(productPointers, product)
-			productByID[product.ID] = product
-		}
-
-		if err := applyCurrentPricing(ctx, tx, productPointers); err != nil {
+		productsByID, err := loadPricedOrderProducts(ctx, tx, normalizedItems)
+		if err != nil {
 			return err
 		}
 
@@ -87,54 +66,12 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID uint, items []Ord
 		}
 
 		for _, item := range normalizedItems {
-			product, ok := productByID[item.ProductID]
+			product, ok := productsByID[item.ProductID]
 			if !ok {
 				return ErrOrderProductNotFound
 			}
 
-			basePrice := roundCurrency(product.Price)
-			unitPrice := roundCurrency(product.EffectivePrice)
-			unitDiscount := roundCurrency(basePrice - unitPrice)
-			if unitDiscount < 0 {
-				unitDiscount = 0
-			}
-
-			lineBaseTotal := roundCurrency(basePrice * float64(item.Quantity))
-			lineTotal := roundCurrency(unitPrice * float64(item.Quantity))
-			lineDiscountTotal := roundCurrency(lineBaseTotal - lineTotal)
-			if lineDiscountTotal < 0 {
-				lineDiscountTotal = 0
-			}
-
-			orderItem := models.OrderItem{
-				ProductID:          product.ID,
-				ProductName:        product.Name,
-				ProductDescription: product.Description,
-				ProductImage:       product.Image,
-				CategoryName:       product.Category.Name,
-				Quantity:           item.Quantity,
-				UnitBasePrice:      basePrice,
-				UnitPrice:          unitPrice,
-				UnitDiscount:       unitDiscount,
-				LineBaseTotal:      lineBaseTotal,
-				LineDiscountTotal:  lineDiscountTotal,
-				LineTotal:          lineTotal,
-			}
-
-			if product.AppliedPromotion != nil {
-				promotionID := product.AppliedPromotion.ID
-				orderItem.PromotionID = &promotionID
-				orderItem.PromotionName = product.AppliedPromotion.Name
-				orderItem.PromotionType = product.AppliedPromotion.Type
-				orderItem.PromotionValue = product.AppliedPromotion.Value
-				orderItem.PromotionAppliesAll = product.AppliedPromotion.AppliesToAll
-			}
-
-			order.Items = append(order.Items, orderItem)
-			order.ItemCount += item.Quantity
-			order.Subtotal = roundCurrency(order.Subtotal + lineBaseTotal)
-			order.Total = roundCurrency(order.Total + lineTotal)
-			order.DiscountTotal = roundCurrency(order.DiscountTotal + lineDiscountTotal)
+			addOrderItem(&order, createOrderItem(product, item))
 		}
 
 		if err := tx.Create(&order).Error; err != nil {
@@ -154,6 +91,76 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID uint, items []Ord
 	}
 
 	return &createdOrder, nil
+}
+
+func loadPricedOrderProducts(ctx context.Context, tx *gorm.DB, items []OrderItemInput) (map[uint]*models.Product, error) {
+	productIDs := make([]uint, 0, len(items))
+	for _, item := range items {
+		productIDs = append(productIDs, item.ProductID)
+	}
+
+	var products []models.Product
+	if err := tx.Preload("Category").Preload("Promotions").Where("id IN ?", productIDs).Find(&products).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch order products: %w", err)
+	}
+	if len(products) != len(productIDs) {
+		return nil, ErrOrderProductNotFound
+	}
+
+	productPointers := make([]*models.Product, 0, len(products))
+	productsByID := make(map[uint]*models.Product, len(products))
+	for i := range products {
+		product := &products[i]
+		productPointers = append(productPointers, product)
+		productsByID[product.ID] = product
+	}
+	if err := applyCurrentPricing(ctx, tx, productPointers); err != nil {
+		return nil, err
+	}
+
+	return productsByID, nil
+}
+
+func createOrderItem(product *models.Product, input OrderItemInput) models.OrderItem {
+	basePrice := roundCurrency(product.Price)
+	unitPrice := roundCurrency(product.EffectivePrice)
+	unitDiscount := max(0, roundCurrency(basePrice-unitPrice))
+	lineBaseTotal := roundCurrency(basePrice * float64(input.Quantity))
+	lineTotal := roundCurrency(unitPrice * float64(input.Quantity))
+	lineDiscountTotal := max(0, roundCurrency(lineBaseTotal-lineTotal))
+
+	item := models.OrderItem{
+		ProductID:          product.ID,
+		ProductName:        product.Name,
+		ProductDescription: product.Description,
+		ProductImage:       product.Image,
+		CategoryName:       product.Category.Name,
+		Quantity:           input.Quantity,
+		UnitBasePrice:      basePrice,
+		UnitPrice:          unitPrice,
+		UnitDiscount:       unitDiscount,
+		LineBaseTotal:      lineBaseTotal,
+		LineDiscountTotal:  lineDiscountTotal,
+		LineTotal:          lineTotal,
+	}
+	if product.AppliedPromotion != nil {
+		promotionID := product.AppliedPromotion.ID
+		item.PromotionID = &promotionID
+		item.PromotionName = product.AppliedPromotion.Name
+		item.PromotionType = product.AppliedPromotion.Type
+		item.PromotionValue = product.AppliedPromotion.Value
+		item.PromotionAppliesAll = product.AppliedPromotion.AppliesToAll
+	}
+
+	return item
+}
+
+func addOrderItem(order *models.Order, item models.OrderItem) {
+	order.Items = append(order.Items, item)
+	order.ItemCount += item.Quantity
+	order.Subtotal = roundCurrency(order.Subtotal + item.LineBaseTotal)
+	order.Total = roundCurrency(order.Total + item.LineTotal)
+	order.DiscountTotal = roundCurrency(order.DiscountTotal + item.LineDiscountTotal)
 }
 
 func (s *OrderService) GetOrdersForUser(ctx context.Context, userID uint) ([]*models.Order, error) {

@@ -86,39 +86,57 @@ func (s *OrderPaymentService) CreateStripeCheckoutSession(ctx context.Context, a
 	}
 
 	if order.StripeCheckoutSessionID != "" {
-		existingSession, err := s.stripe.GetCheckoutSession(ctx, order.StripeCheckoutSessionID)
-		switch {
-		case err == nil:
-			if _, err := s.applyCheckoutSessionState(ctx, existingSession, ""); err != nil {
-				return nil, err
-			}
-
-			refreshedOrder, refreshErr := s.orderService.GetOrderByID(ctx, actorID, orderID, actorRole)
-			if refreshErr != nil {
-				return nil, refreshErr
-			}
-
-			if refreshedOrder.Status != models.OrderStatusAwaitingPayment {
-				return nil, ErrOrderPaymentNotAvailable
-			}
-
-			if existingSession.Status == "open" && existingSession.PaymentStatus != "paid" {
-				if existingSession.URL == "" {
-					return nil, ErrOrderCheckoutURLMissing
-				}
-
-				return &OrderCheckoutSessionResult{
-					SessionID: existingSession.ID,
-					URL:       existingSession.URL,
-					Reused:    true,
-				}, nil
-			}
-		case errors.Is(err, ErrStripeSessionNotFound):
-		default:
+		existing, reusable, err := s.reusableCheckoutSession(ctx, order, actorID, orderID, actorRole)
+		if err != nil {
 			return nil, err
+		}
+		if reusable {
+			return existing, nil
 		}
 	}
 
+	return s.createCheckoutSession(ctx, order, successURL, cancelURL)
+}
+
+func (s *OrderPaymentService) reusableCheckoutSession(
+	ctx context.Context,
+	order *models.Order,
+	actorID, orderID uint,
+	actorRole string,
+) (*OrderCheckoutSessionResult, bool, error) {
+	session, err := s.stripe.GetCheckoutSession(ctx, order.StripeCheckoutSessionID)
+	if errors.Is(err, ErrStripeSessionNotFound) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+
+	if _, err := s.applyCheckoutSessionState(ctx, session, ""); err != nil {
+		return nil, false, err
+	}
+	refreshedOrder, err := s.orderService.GetOrderByID(ctx, actorID, orderID, actorRole)
+	if err != nil {
+		return nil, false, err
+	}
+	if refreshedOrder.Status != models.OrderStatusAwaitingPayment {
+		return nil, false, ErrOrderPaymentNotAvailable
+	}
+	if session.Status != "open" || session.PaymentStatus == "paid" {
+		return nil, false, nil
+	}
+	if session.URL == "" {
+		return nil, false, ErrOrderCheckoutURLMissing
+	}
+
+	return &OrderCheckoutSessionResult{
+		SessionID: session.ID,
+		URL:       session.URL,
+		Reused:    true,
+	}, true, nil
+}
+
+func (s *OrderPaymentService) createCheckoutSession(ctx context.Context, order *models.Order, successURL, cancelURL string) (*OrderCheckoutSessionResult, error) {
 	lineItems := make([]StripeCheckoutLineItem, 0, len(order.Items))
 	for _, item := range order.Items {
 		lineItems = append(lineItems, StripeCheckoutLineItem{
@@ -154,7 +172,6 @@ func (s *OrderPaymentService) CreateStripeCheckoutSession(ctx context.Context, a
 	return &OrderCheckoutSessionResult{
 		SessionID: session.ID,
 		URL:       session.URL,
-		Reused:    false,
 	}, nil
 }
 

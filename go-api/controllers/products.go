@@ -43,18 +43,18 @@ func (h *ProductHandler) FindOneProduct(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
+		RespondError(c, http.StatusBadRequest, "INVALID_ID", errorInvalidProductID, nil)
 		return
 	}
 
 	product, err := h.productService.GetProductByID(ctx, uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
+			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", errorProductNotFound, nil)
 			return
 		}
-		logger.Error("Failed to fetch product %d: %v", id, err)
-		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch product", nil)
+		logger.Error(logFailedFetchProduct, id, err)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", errorFailedFetchProduct, nil)
 		return
 	}
 
@@ -66,7 +66,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 
 	var req CreateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", errorInvalidRequestPayload, err.Error())
 		return
 	}
 
@@ -80,7 +80,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 
 	if _, err := h.categoryService.GetCategoryByID(ctx, req.CategoryID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusBadRequest, "CATEGORY_NOT_FOUND", "Category not found", nil)
+			RespondError(c, http.StatusBadRequest, "CATEGORY_NOT_FOUND", errorCategoryNotFound, nil)
 			return
 		}
 		logger.Error("Failed to fetch category %d: %v", req.CategoryID, err)
@@ -102,13 +102,13 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
+		RespondError(c, http.StatusBadRequest, "INVALID_ID", errorInvalidProductID, nil)
 		return
 	}
 
 	var req UpdateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", errorInvalidRequestPayload, err.Error())
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 
 	if _, err := h.categoryService.GetCategoryByID(ctx, req.CategoryID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusBadRequest, "CATEGORY_NOT_FOUND", "Category not found", nil)
+			RespondError(c, http.StatusBadRequest, "CATEGORY_NOT_FOUND", errorCategoryNotFound, nil)
 			return
 		}
 		logger.Error("Failed to fetch category %d: %v", req.CategoryID, err)
@@ -133,11 +133,11 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	product, err := h.productService.UpdateProduct(ctx, uint(id), updates)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
+			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", errorProductNotFound, nil)
 			return
 		}
 		logger.Error("Failed to update product %d: %v", id, err)
-		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update product", nil)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", errorFailedUpdateProduct, nil)
 		return
 	}
 
@@ -149,13 +149,13 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
+		RespondError(c, http.StatusBadRequest, "INVALID_ID", errorInvalidProductID, nil)
 		return
 	}
 
 	if err := h.productService.DeleteProduct(ctx, uint(id)); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
+			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", errorProductNotFound, nil)
 			return
 		}
 		logger.Error("Failed to delete product %d: %v", id, err)
@@ -171,18 +171,18 @@ func (h *ProductHandler) UploadProductImage(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
+		RespondError(c, http.StatusBadRequest, "INVALID_ID", errorInvalidProductID, nil)
 		return
 	}
 
 	product, err := h.productService.GetProductByID(ctx, uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
+			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", errorProductNotFound, nil)
 			return
 		}
-		logger.Error("Failed to fetch product %d: %v", id, err)
-		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch product", nil)
+		logger.Error(logFailedFetchProduct, id, err)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", errorFailedFetchProduct, nil)
 		return
 	}
 
@@ -215,7 +215,7 @@ func (h *ProductHandler) UploadProductImage(c *gin.Context) {
 	if err != nil {
 		logger.Error("Failed to update product %d with image: %v", id, err)
 		_ = h.fileService.DeleteImage(filename)
-		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update product", nil)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", errorFailedUpdateProduct, nil)
 		return
 	}
 
@@ -227,18 +227,18 @@ func (h *ProductHandler) DeleteProductImage(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid product ID", nil)
+		RespondError(c, http.StatusBadRequest, "INVALID_ID", errorInvalidProductID, nil)
 		return
 	}
 
 	product, err := h.productService.GetProductByID(ctx, uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", "Product not found", nil)
+			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", errorProductNotFound, nil)
 			return
 		}
-		logger.Error("Failed to fetch product %d: %v", id, err)
-		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch product", nil)
+		logger.Error(logFailedFetchProduct, id, err)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", errorFailedFetchProduct, nil)
 		return
 	}
 
@@ -251,7 +251,7 @@ func (h *ProductHandler) DeleteProductImage(c *gin.Context) {
 	updated, err := h.productService.UpdateProduct(ctx, uint(id), map[string]interface{}{"image": ""})
 	if err != nil {
 		logger.Error("Failed to update product %d: %v", id, err)
-		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update product", nil)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", errorFailedUpdateProduct, nil)
 		return
 	}
 

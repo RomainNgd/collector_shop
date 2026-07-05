@@ -28,7 +28,7 @@ func (h *OrderHandler) FindOrder(c *gin.Context) {
 
 	userID, err := userIDFromContext(c)
 	if err != nil {
-		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", "Invalid authentication context", nil)
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
 		return
 	}
 
@@ -53,7 +53,7 @@ func (h *OrderHandler) FindOneOrder(c *gin.Context) {
 	order, err := h.orderService.GetOrderByID(ctx, userID, orderID, role)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			RespondError(c, http.StatusNotFound, "ORDER_NOT_FOUND", "Order not found", nil)
+			RespondError(c, http.StatusNotFound, "ORDER_NOT_FOUND", errorOrderNotFound, nil)
 			return
 		}
 		logger.Error("Failed to fetch order %d for user %d: %v", orderID, userID, err)
@@ -69,13 +69,13 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 	userID, err := userIDFromContext(c)
 	if err != nil {
-		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", "Invalid authentication context", nil)
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
 		return
 	}
 
 	var req CreateOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", errorInvalidRequestPayload, err.Error())
 		return
 	}
 
@@ -115,7 +115,7 @@ func (h *OrderHandler) CreateCheckoutSession(c *gin.Context) {
 
 	var req CreateOrderCheckoutSessionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", errorInvalidRequestPayload, err.Error())
 		return
 	}
 
@@ -142,7 +142,7 @@ func (h *OrderHandler) CreateCheckoutSession(c *gin.Context) {
 			RespondError(c, http.StatusBadRequest, "CHECKOUT_RETURN_URL_INVALID", "Checkout return URL is not allowed", nil)
 			return
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			RespondError(c, http.StatusNotFound, "ORDER_NOT_FOUND", "Order not found", nil)
+			RespondError(c, http.StatusNotFound, "ORDER_NOT_FOUND", errorOrderNotFound, nil)
 			return
 		default:
 			logger.Error("Failed to create checkout session for order %d and user %d: %v", orderID, userID, err)
@@ -168,7 +168,7 @@ func (h *OrderHandler) UpdateOrder(c *gin.Context) {
 
 	var req UpdateOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request payload", err.Error())
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", errorInvalidRequestPayload, err.Error())
 		return
 	}
 
@@ -182,7 +182,7 @@ func (h *OrderHandler) UpdateOrder(c *gin.Context) {
 			RespondError(c, http.StatusConflict, "ORDER_STATUS_TRANSITION_INVALID", "Order status transition not allowed", nil)
 			return
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			RespondError(c, http.StatusNotFound, "ORDER_NOT_FOUND", "Order not found", nil)
+			RespondError(c, http.StatusNotFound, "ORDER_NOT_FOUND", errorOrderNotFound, nil)
 			return
 		default:
 			logger.Error("Failed to update order %d for user %d: %v", orderID, userID, err)
@@ -208,7 +208,7 @@ func (h *OrderHandler) DeleteOrder(c *gin.Context) {
 			RespondError(c, http.StatusConflict, "ORDER_DELETE_NOT_ALLOWED", "Order cannot be deleted in its current state", nil)
 			return
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			RespondError(c, http.StatusNotFound, "ORDER_NOT_FOUND", "Order not found", nil)
+			RespondError(c, http.StatusNotFound, "ORDER_NOT_FOUND", errorOrderNotFound, nil)
 			return
 		default:
 			logger.Error("Failed to delete order %d for user %d: %v", orderID, userID, err)
@@ -223,7 +223,7 @@ func (h *OrderHandler) DeleteOrder(c *gin.Context) {
 func (h *OrderHandler) readActorAndOrderID(c *gin.Context) (uint, string, uint, bool) {
 	userID, err := userIDFromContext(c)
 	if err != nil {
-		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", "Invalid authentication context", nil)
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
 		return 0, "", 0, false
 	}
 

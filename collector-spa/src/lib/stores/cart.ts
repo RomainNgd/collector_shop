@@ -72,7 +72,7 @@ export const addToCart = (product: Product) => {
 	const normalizedProduct = normalizeProduct(product);
 
 	cart.update((items) => {
-		const existing = items.find((item) => item.product.id === normalizedProduct.id);
+		const existing = items.some((item) => item.product.id === normalizedProduct.id);
 		if (!existing) {
 			return [...items, { product: normalizedProduct, quantity: 1 }];
 		}

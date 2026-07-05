@@ -13,7 +13,7 @@ type JwtClaims = Record<string, unknown> & {
 
 const decodeBase64Url = (value: string): string | null => {
 	try {
-		const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+		const normalized = value.replaceAll('-', '+').replaceAll('_', '/');
 		const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
 		return Buffer.from(padded, 'base64').toString('utf-8');
 	} catch {
@@ -44,7 +44,7 @@ const signHS256 = (header: string, payload: string, secret: string): Buffer =>
 
 const decodeJwtSignature = (signature: string): Buffer | null => {
 	try {
-		const normalized = signature.replace(/-/g, '+').replace(/_/g, '/');
+		const normalized = signature.replaceAll('-', '+').replaceAll('_', '/');
 		const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
 		return Buffer.from(padded, 'base64');
 	} catch {

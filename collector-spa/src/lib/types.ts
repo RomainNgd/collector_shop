@@ -242,6 +242,26 @@ const mapApiPromotionSummary = (
 	};
 };
 
+const getProductCategoryId = (item: ApiProduct): number | null => {
+	if (typeof item.CategoryID === 'number') {
+		return item.CategoryID;
+	}
+
+	return typeof item.category_id === 'number' ? item.category_id : null;
+};
+
+const getOrderItemCount = (item: ApiOrder): number => {
+	if (typeof item.item_count === 'number' && Number.isFinite(item.item_count)) {
+		return item.item_count;
+	}
+
+	if (!Array.isArray(item.items)) {
+		return 0;
+	}
+
+	return item.items.reduce((total, orderItem) => total + orderItem.quantity, 0);
+};
+
 export const mapApiProduct = (item: ApiProduct, apiBaseUrl: string): Product => ({
 	id: item.ID,
 	name: item.name,
@@ -250,12 +270,7 @@ export const mapApiProduct = (item: ApiProduct, apiBaseUrl: string): Product => 
 	basePrice: item.price,
 	imageUrl: buildProductImageUrl(item.image, apiBaseUrl),
 	imageName: normalizeImageName(item.image),
-	categoryId:
-		typeof item.CategoryID === 'number'
-			? item.CategoryID
-			: typeof item.category_id === 'number'
-				? item.category_id
-				: null,
+	categoryId: getProductCategoryId(item),
 	category:
 		typeof item.category === 'string' ? item.category : (item.category?.name ?? 'non-classe'),
 	promotion: mapApiPromotionSummary(item.applied_promotion)
@@ -314,12 +329,7 @@ export const mapApiOrder = (item: ApiOrder, apiBaseUrl: string): Order => ({
 	createdAt: item.CreatedAt ?? '',
 	status: normalizeOrderStatus(item.status),
 	currency: item.currency ?? 'EUR',
-	itemCount:
-		typeof item.item_count === 'number' && Number.isFinite(item.item_count)
-			? item.item_count
-			: Array.isArray(item.items)
-				? item.items.reduce((total, orderItem) => total + orderItem.quantity, 0)
-				: 0,
+	itemCount: getOrderItemCount(item),
 	subtotal: item.subtotal,
 	discountTotal: item.discount_total,
 	total: item.total,

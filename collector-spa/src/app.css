@@ -331,19 +331,19 @@ textarea:disabled {
 .status-pill-shipping {
 	background: rgb(114 168 255 / 0.18);
 	border-color: rgb(114 168 255 / 0.3);
-	color: #143d7a;
+	color: #0b2f66;
 }
 
 .status-pill-delivered {
 	background: rgb(78 184 112 / 0.18);
 	border-color: rgb(78 184 112 / 0.3);
-	color: #0f5a2f;
+	color: #064523;
 }
 
 .status-pill-cancelled {
 	background: rgb(214 97 97 / 0.16);
 	border-color: rgb(214 97 97 / 0.28);
-	color: #7a1f1f;
+	color: #641414;
 }
 
 .theme-kicker {
