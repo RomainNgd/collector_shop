@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"poc-gin/models"
@@ -31,6 +32,73 @@ func TestLoadDemoFixtures(t *testing.T) {
 	}
 	if len(fixtures.Users) != 3 {
 		t.Fatalf("expected 3 users, got %d", len(fixtures.Users))
+	}
+}
+
+func TestValidateDemoFixturesRejectsInvalidData(t *testing.T) {
+	tests := []struct {
+		name          string
+		mutate        func(*demoFixtures)
+		errorFragment string
+	}{
+		{"missing categories", func(f *demoFixtures) { f.Categories = nil }, "at least one category"},
+		{"missing products", func(f *demoFixtures) { f.Products = nil }, "at least one product"},
+		{"missing promotions", func(f *demoFixtures) { f.Promotions = nil }, "at least one promotion"},
+		{"missing users", func(f *demoFixtures) { f.Users = nil }, "at least one user"},
+		{"empty category name", func(f *demoFixtures) { f.Categories[0].Name = "" }, "category name"},
+		{"empty category description", func(f *demoFixtures) { f.Categories[0].Description = "" }, "include a description"},
+		{"duplicate category", func(f *demoFixtures) { f.Categories[1].Name = f.Categories[0].Name }, "duplicated"},
+		{"empty product name", func(f *demoFixtures) { f.Products[0].Name = "" }, "product name"},
+		{"empty product description", func(f *demoFixtures) { f.Products[0].Description = "" }, "include a description"},
+		{"empty product image", func(f *demoFixtures) { f.Products[0].Image = "" }, "include an image"},
+		{"unsafe product image", func(f *demoFixtures) { f.Products[0].Image = "../image.png" }, "invalid image filename"},
+		{"invalid product price", func(f *demoFixtures) { f.Products[0].Price = 0 }, "positive price"},
+		{"unknown category", func(f *demoFixtures) { f.Products[0].Category = "unknown" }, "unknown category"},
+		{"missing image", func(f *demoFixtures) { f.Products[0].Image = "missing.png" }, "missing image"},
+		{"duplicate product", func(f *demoFixtures) { f.Products[1].Name = f.Products[0].Name }, "duplicated"},
+		{"empty promotion name", func(f *demoFixtures) { f.Promotions[0].Name = "" }, "promotion name"},
+		{"invalid promotion type", func(f *demoFixtures) { f.Promotions[0].Type = "unknown" }, "invalid type"},
+		{"invalid promotion value", func(f *demoFixtures) { f.Promotions[0].Value = 0 }, "positive value"},
+		{"excessive percentage", func(f *demoFixtures) {
+			f.Promotions[0].Type = models.PromotionTypePercentage
+			f.Promotions[0].Value = 101
+		}, "cannot exceed 100"},
+		{"promotion without products", func(f *demoFixtures) {
+			f.Promotions[0].AppliesToAll = false
+			f.Promotions[0].Products = nil
+		}, "target at least one product"},
+		{"empty promotion product", func(f *demoFixtures) {
+			f.Promotions[0].AppliesToAll = false
+			f.Promotions[0].Products = []string{""}
+		}, "empty product reference"},
+		{"unknown promotion product", func(f *demoFixtures) {
+			f.Promotions[0].AppliesToAll = false
+			f.Promotions[0].Products = []string{"unknown"}
+		}, "unknown product"},
+		{"duplicate promotion product", func(f *demoFixtures) {
+			f.Promotions[0].AppliesToAll = false
+			f.Promotions[0].Products = []string{f.Products[0].Name, f.Products[0].Name}
+		}, "duplicate product"},
+		{"duplicate promotion", func(f *demoFixtures) { f.Promotions[1].Name = f.Promotions[0].Name }, "duplicated"},
+		{"empty user email", func(f *demoFixtures) { f.Users[0].Email = "" }, "user email"},
+		{"empty user password", func(f *demoFixtures) { f.Users[0].Password = "" }, "include a password"},
+		{"invalid user role", func(f *demoFixtures) { f.Users[0].Role = "unknown" }, "invalid role"},
+		{"duplicate user", func(f *demoFixtures) { f.Users[1].Email = f.Users[0].Email }, "duplicated"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixtures, err := loadDemoFixtures()
+			if err != nil {
+				t.Fatalf("expected base fixtures to load: %v", err)
+			}
+			test.mutate(fixtures)
+
+			err = validateDemoFixtures(fixtures)
+			if err == nil || !strings.Contains(err.Error(), test.errorFragment) {
+				t.Fatalf("expected error containing %q, got %v", test.errorFragment, err)
+			}
+		})
 	}
 }
 
