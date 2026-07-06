@@ -160,4 +160,97 @@ describe('API mapping helpers', () => {
 			]
 		});
 	});
+
+	it('maps fallback product, promotion and order shapes', () => {
+		const productWithObjectCategory = mapApiProduct(
+			{
+				ID: 2,
+				name: 'Cards',
+				description: 'Trading cards',
+				price: 12,
+				image: ' cards.png ',
+				CategoryID: 8,
+				category: { ID: 8, name: 'TCG' },
+				applied_promotion: {
+					ID: 3,
+					name: 'Fixed',
+					type: PROMOTION_TYPE_FIXED,
+					value: 2
+				}
+			},
+			'https://api.collector.local'
+		);
+		expect(productWithObjectCategory).toMatchObject({
+			categoryId: 8,
+			category: 'TCG',
+			imageName: 'cards.png',
+			promotion: { id: 3, discountAmount: 0, appliesToAll: false }
+		});
+
+		const productWithInvalidPromotion = mapApiProduct(
+			{
+				ID: 3,
+				name: 'Binder',
+				description: 'Binder',
+				price: 10,
+				image: '',
+				category_id: 4,
+				applied_promotion: { id: 0, name: 'Invalid', type: 'fixed', value: 1 }
+			},
+			'https://api.collector.local'
+		);
+		expect(productWithInvalidPromotion).toMatchObject({ categoryId: 4, promotion: null });
+
+		expect(mapApiPromotion({ ID: 4, name: 'Defaults', type: 'unknown', value: 1 })).toMatchObject({
+			description: '',
+			type: PROMOTION_TYPE_PERCENTAGE,
+			isActive: false,
+			appliesToAll: false,
+			productIds: [],
+			productCount: 0
+		});
+
+		const fallbackOrder = mapApiOrder(
+			{
+				ID: 5,
+				status: 'unknown',
+				subtotal: 20,
+				discount_total: 0,
+				total: 20,
+				payment_provider: ' ',
+				payment_status: '',
+				paid_at: '',
+				stripe_checkout_expires_at: '',
+				items: [
+					{
+						ID: 1,
+						product_name: 'Binder',
+						product_description: 'Binder',
+						product_image: '',
+						quantity: 2,
+						unit_base_price: 10,
+						unit_price: 10,
+						unit_discount: 0,
+						line_base_total: 20,
+						line_discount_total: 0,
+						line_total: 20,
+						promotion_id: Number.NaN,
+						promotion_value: Number.NaN
+					}
+				]
+			},
+			'https://api.collector.local'
+		);
+		expect(fallbackOrder).toMatchObject({
+			createdAt: '',
+			status: ORDER_STATUS_AWAITING_PAYMENT,
+			currency: 'EUR',
+			itemCount: 2,
+			paymentProvider: null,
+			paymentStatus: null,
+			paidAt: null,
+			stripeCheckoutExpiresAt: null,
+			items: [{ productId: 0, categoryName: 'non-classe', promotionId: null }]
+		});
+	});
 });
