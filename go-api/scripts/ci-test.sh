@@ -8,4 +8,6 @@ project_dir="$(CDPATH= cd -- "$script_dir/.." && pwd)"
 cd "$project_dir"
 
 echo "Running Go tests from $project_dir"
-go test ./... -coverprofile=coverage.out
+# Database-backed packages share the same PostgreSQL service in CI.
+# Run packages sequentially to prevent concurrent AutoMigrate operations.
+go test -p 1 ./... -coverprofile=coverage.out
