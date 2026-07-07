@@ -24,6 +24,10 @@ const buildProduct = (overrides: Partial<Product> = {}): Product => ({
 	imageName: 'console.png',
 	categoryId: 2,
 	category: 'Consoles',
+	sellerId: 7,
+	sellerEmail: 'seller@test.local',
+	stock: 3,
+	isActive: true,
 	promotion: {
 		id: 3,
 		name: 'Spring',

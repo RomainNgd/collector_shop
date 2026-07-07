@@ -17,3 +17,19 @@ export const loadProducts = async (fetchFn: typeof fetch): Promise<Product[]> =>
 
 	return payload.data.map((item) => mapApiProduct(item, API_PUBLIC_BASE_URL));
 };
+
+export const loadSellerProducts = async (fetchFn: typeof fetch): Promise<Product[]> => {
+	const response = await fetchFn(buildInternalApiPath('/seller/products'));
+
+	if (!response.ok) {
+		throw error(response.status, 'Impossible de charger tes produits');
+	}
+
+	const { payload } = await readApiResponse<ApiProduct[]>(response);
+
+	if (!Array.isArray(payload?.data)) {
+		throw error(502, 'Format de reponse API invalide');
+	}
+
+	return payload.data.map((item) => mapApiProduct(item, API_PUBLIC_BASE_URL));
+};

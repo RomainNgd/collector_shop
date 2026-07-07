@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"poc-gin/models"
+	"poc-gin/pkg/constants"
 	"poc-gin/pkg/logger"
 	"poc-gin/services"
 	"strconv"
@@ -38,6 +39,29 @@ func (h *ProductHandler) FindProduct(c *gin.Context) {
 	RespondSuccess(c, http.StatusOK, products)
 }
 
+func (h *ProductHandler) FindSellerProducts(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	userID, err := userIDFromContext(c)
+	if err != nil {
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
+		return
+	}
+	if userRoleFromContext(c) == constants.RoleAdmin {
+		RespondError(c, http.StatusForbidden, "PRODUCT_ADMIN_CREATE_FORBIDDEN", "Admins cannot sell products", nil)
+		return
+	}
+
+	products, err := h.productService.GetProductsForSeller(ctx, userID)
+	if err != nil {
+		logger.Error("Failed to fetch seller products for user %d: %v", userID, err)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch seller products", nil)
+		return
+	}
+
+	RespondSuccess(c, http.StatusOK, products)
+}
+
 func (h *ProductHandler) FindOneProduct(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -64,18 +88,31 @@ func (h *ProductHandler) FindOneProduct(c *gin.Context) {
 func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	userID, err := userIDFromContext(c)
+	if err != nil {
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
+		return
+	}
+
 	var req CreateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", errorInvalidRequestPayload, err.Error())
 		return
 	}
 
+	promotionActive := dereferenceBool(req.PromotionActive)
 	product := &models.Product{
-		Name:        req.Name,
-		Description: req.Description,
-		Image:       req.Image,
-		Price:       req.Price,
-		CategoryID:  req.CategoryID,
+		Name:            req.Name,
+		Description:     req.Description,
+		Image:           req.Image,
+		Price:           req.Price,
+		Stock:           req.Stock,
+		IsActive:        true,
+		SellerID:        &userID,
+		CategoryID:      req.CategoryID,
+		PromotionType:   req.PromotionType,
+		PromotionValue:  req.PromotionValue,
+		PromotionActive: promotionActive,
 	}
 
 	if _, err := h.categoryService.GetCategoryByID(ctx, req.CategoryID); err != nil {
@@ -89,6 +126,9 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	}
 
 	if err := h.productService.CreateProduct(ctx, product); err != nil {
+		if handleProductError(c, err) {
+			return
+		}
 		logger.Error("Failed to create product: %v", err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create product", nil)
 		return
@@ -99,6 +139,13 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	ctx := c.Request.Context()
+
+	userID, err := userIDFromContext(c)
+	if err != nil {
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
+		return
+	}
+	role := userRoleFromContext(c)
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -113,11 +160,16 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{
-		"name":        req.Name,
-		"description": req.Description,
-		"image":       req.Image,
-		"price":       req.Price,
-		"category_id": req.CategoryID,
+		"name":             req.Name,
+		"description":      req.Description,
+		"image":            req.Image,
+		"price":            req.Price,
+		"stock":            req.Stock,
+		"is_active":        dereferenceBool(req.IsActive),
+		"category_id":      req.CategoryID,
+		"promotion_type":   req.PromotionType,
+		"promotion_value":  req.PromotionValue,
+		"promotion_active": dereferenceBool(req.PromotionActive),
 	}
 
 	if _, err := h.categoryService.GetCategoryByID(ctx, req.CategoryID); err != nil {
@@ -130,10 +182,13 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	product, err := h.productService.UpdateProduct(ctx, uint(id), updates)
+	product, err := h.productService.UpdateProduct(ctx, userID, role, uint(id), updates)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", errorProductNotFound, nil)
+			return
+		}
+		if handleProductError(c, err) {
 			return
 		}
 		logger.Error("Failed to update product %d: %v", id, err)
@@ -147,15 +202,25 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	userID, err := userIDFromContext(c)
+	if err != nil {
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
+		return
+	}
+	role := userRoleFromContext(c)
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "INVALID_ID", errorInvalidProductID, nil)
 		return
 	}
 
-	if err := h.productService.DeleteProduct(ctx, uint(id)); err != nil {
+	if err := h.productService.DeleteProduct(ctx, userID, role, uint(id)); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			RespondError(c, http.StatusNotFound, "PRODUCT_NOT_FOUND", errorProductNotFound, nil)
+			return
+		}
+		if handleProductError(c, err) {
 			return
 		}
 		logger.Error("Failed to delete product %d: %v", id, err)
@@ -168,6 +233,13 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 
 func (h *ProductHandler) UploadProductImage(c *gin.Context) {
 	ctx := c.Request.Context()
+
+	userID, err := userIDFromContext(c)
+	if err != nil {
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
+		return
+	}
+	role := userRoleFromContext(c)
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -211,8 +283,12 @@ func (h *ProductHandler) UploadProductImage(c *gin.Context) {
 		_ = h.fileService.DeleteImage(product.Image)
 	}
 
-	updated, err := h.productService.UpdateProduct(ctx, uint(id), map[string]interface{}{"image": filename})
+	updated, err := h.productService.UpdateProduct(ctx, userID, role, uint(id), map[string]interface{}{"image": filename})
 	if err != nil {
+		if handleProductError(c, err) {
+			_ = h.fileService.DeleteImage(filename)
+			return
+		}
 		logger.Error("Failed to update product %d with image: %v", id, err)
 		_ = h.fileService.DeleteImage(filename)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", errorFailedUpdateProduct, nil)
@@ -224,6 +300,13 @@ func (h *ProductHandler) UploadProductImage(c *gin.Context) {
 
 func (h *ProductHandler) DeleteProductImage(c *gin.Context) {
 	ctx := c.Request.Context()
+
+	userID, err := userIDFromContext(c)
+	if err != nil {
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
+		return
+	}
+	role := userRoleFromContext(c)
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -248,12 +331,37 @@ func (h *ProductHandler) DeleteProductImage(c *gin.Context) {
 		}
 	}
 
-	updated, err := h.productService.UpdateProduct(ctx, uint(id), map[string]interface{}{"image": ""})
+	updated, err := h.productService.UpdateProduct(ctx, userID, role, uint(id), map[string]interface{}{"image": ""})
 	if err != nil {
+		if handleProductError(c, err) {
+			return
+		}
 		logger.Error("Failed to update product %d: %v", id, err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", errorFailedUpdateProduct, nil)
 		return
 	}
 
 	RespondSuccess(c, http.StatusOK, updated)
+}
+
+func handleProductError(c *gin.Context, err error) bool {
+	switch {
+	case errors.Is(err, services.ErrProductAccessDenied):
+		RespondError(c, http.StatusForbidden, "PRODUCT_ACCESS_DENIED", "You cannot modify this product", nil)
+		return true
+	case errors.Is(err, services.ErrProductSellerRequired):
+		RespondError(c, http.StatusBadRequest, "PRODUCT_SELLER_REQUIRED", "Product seller is required", nil)
+		return true
+	case errors.Is(err, services.ErrProductInvalidStock):
+		RespondError(c, http.StatusBadRequest, "PRODUCT_STOCK_INVALID", "Product stock must be positive", nil)
+		return true
+	case errors.Is(err, services.ErrProductInvalidPromotionType):
+		RespondError(c, http.StatusBadRequest, "PRODUCT_PROMOTION_TYPE_INVALID", "Promotion type is invalid", nil)
+		return true
+	case errors.Is(err, services.ErrProductInvalidPromotionValue):
+		RespondError(c, http.StatusBadRequest, "PRODUCT_PROMOTION_VALUE_INVALID", "Promotion value is invalid", nil)
+		return true
+	default:
+		return false
+	}
 }

@@ -51,6 +51,10 @@
 					<a href={resolve('/')} class="nav-link">Accueil</a>
 					<a href={resolve('/catalogue')} class="nav-link">Catalogue</a>
 					{#if data.user}
+						{#if data.user.role !== ADMIN_ROLE}
+							<a href={resolve('/vendre')} class="nav-link">Vendre</a>
+							<a href={resolve('/mes-produits')} class="nav-link">Mes produits</a>
+						{/if}
 						<a href={resolve('/mes-commandes')} class="nav-link">Mes commandes</a>
 					{/if}
 					{#if data.user?.role === ADMIN_ROLE}

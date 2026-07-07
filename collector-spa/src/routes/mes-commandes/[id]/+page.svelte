@@ -98,6 +98,9 @@
 							<p class="theme-copy mt-2 line-clamp-2 text-sm">{item.productDescription}</p>
 							<div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
 								<span class="theme-pill theme-pill-contrast">Quantite: {item.quantity}</span>
+								{#if item.sellerEmail}
+									<span class="theme-pill">Vendeur: {item.sellerEmail}</span>
+								{/if}
 								{#if item.promotionName}
 									<span class="theme-pill">Promo: {item.promotionName}</span>
 								{/if}

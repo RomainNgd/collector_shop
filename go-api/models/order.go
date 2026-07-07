@@ -47,6 +47,8 @@ type OrderItem struct {
 	gorm.Model
 	OrderID             uint    `gorm:"not null;index" json:"order_id"`
 	ProductID           uint    `gorm:"not null;index" json:"product_id"`
+	SellerID            uint    `gorm:"index" json:"seller_id"`
+	SellerEmail         string  `gorm:"size:255" json:"seller_email,omitempty"`
 	ProductName         string  `gorm:"not null;size:120" json:"product_name"`
 	ProductDescription  string  `gorm:"not null;size:1000" json:"product_description"`
 	ProductImage        string  `gorm:"size:255" json:"product_image"`

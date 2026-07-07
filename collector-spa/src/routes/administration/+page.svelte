@@ -2,16 +2,21 @@
 	import AdminDashboard from '$lib/components/AdminDashboard.svelte';
 	import ProductPrice from '$lib/components/ProductPrice.svelte';
 	import { formatPromotionScope, formatPromotionValue } from '$lib/promotions';
-	import type { Category, Product, Promotion } from '$lib/types';
+	import {
+		PROMOTION_TYPE_FIXED,
+		PROMOTION_TYPE_PERCENTAGE,
+		type Category,
+		type Product,
+		type Promotion
+	} from '$lib/types';
 	import type { ActionData, PageData } from './$types';
 
 	type AdminSection = 'dashboard' | 'products' | 'categories' | 'promotions';
 
 	const adminSections = [
 		{ id: 'dashboard' as const, title: 'Dashboard', description: 'Vue rapide et indicateurs' },
-		{ id: 'products' as const, title: 'Produits', description: 'Catalogue et images' },
-		{ id: 'categories' as const, title: 'Categories', description: 'Taxonomie du shop' },
-		{ id: 'promotions' as const, title: 'Promotions', description: 'Remises globales ou ciblees' }
+		{ id: 'products' as const, title: 'Produits', description: 'Annonces vendeurs' },
+		{ id: 'categories' as const, title: 'Categories', description: 'Taxonomie du shop' }
 	];
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -171,12 +176,6 @@
 		}
 	});
 
-	const openCreateProductModal = () => {
-		closeAllModals();
-		activeSection = 'products';
-		isCreateProductModalOpen = true;
-	};
-
 	const openEditProductModal = (product: Product) => {
 		closeAllModals();
 		activeSection = 'products';
@@ -323,15 +322,8 @@
 					<div>
 						<p class="theme-kicker">Produits</p>
 						<h2 class="theme-title mt-3 text-3xl font-black">Administration des produits</h2>
-						<p class="theme-copy mt-2">Gestion complete du catalogue et des images.</p>
+						<p class="theme-copy mt-2">Supervision des annonces publiees par les vendeurs.</p>
 					</div>
-					<button
-						type="button"
-						class="theme-button theme-button-primary"
-						onclick={openCreateProductModal}
-					>
-						Ajouter un produit
-					</button>
 				</div>
 			</div>
 
@@ -731,6 +723,42 @@
 					/>
 				</div>
 				<div>
+					<label for="edit-stock" class="theme-label">Stock</label>
+					<input
+						id="edit-stock"
+						name="stock"
+						type="number"
+						min="1"
+						step="1"
+						required
+						value={form?.action === 'edit-product'
+							? (form.values?.stock ?? String(selectedProduct?.stock ?? 1))
+							: String(selectedProduct?.stock ?? 1)}
+						class="theme-input"
+					/>
+				</div>
+				<div>
+					<label for="edit-active" class="theme-label">Statut</label>
+					<select id="edit-active" name="is_active" class="theme-select">
+						<option
+							value="true"
+							selected={form?.action === 'edit-product'
+								? form.values?.isActive !== 'false'
+								: selectedProduct?.isActive !== false}
+						>
+							Actif
+						</option>
+						<option
+							value="false"
+							selected={form?.action === 'edit-product'
+								? form.values?.isActive === 'false'
+								: selectedProduct?.isActive === false}
+						>
+							Inactif
+						</option>
+					</select>
+				</div>
+				<div>
 					<label for="edit-category" class="theme-label">Categorie</label>
 					<select id="edit-category" name="category_id" required class="theme-select">
 						<option value="">Selectionner une categorie</option>
@@ -758,6 +786,60 @@
 							? (form.values?.description ?? selectedProduct?.description ?? '')
 							: (selectedProduct?.description ?? '')}</textarea
 					>
+				</div>
+				<div class="grid gap-4 md:grid-cols-3">
+					<div>
+						<label for="edit-promotion-active" class="theme-label">Promotion</label>
+						<select id="edit-promotion-active" name="promotion_active" class="theme-select">
+							<option
+								value="false"
+								selected={form?.action === 'edit-product'
+									? form.values?.promotionActive !== 'true'
+									: !selectedProduct?.promotion}
+							>
+								Inactive
+							</option>
+							<option
+								value="true"
+								selected={form?.action === 'edit-product'
+									? form.values?.promotionActive === 'true'
+									: Boolean(selectedProduct?.promotion)}
+							>
+								Active
+							</option>
+						</select>
+					</div>
+					<div>
+						<label for="edit-promotion-type" class="theme-label">Type</label>
+						<select id="edit-promotion-type" name="promotion_type" class="theme-select">
+							<option
+								value={PROMOTION_TYPE_PERCENTAGE}
+								selected={selectedProduct?.promotion?.type !== PROMOTION_TYPE_FIXED}
+							>
+								Pourcentage
+							</option>
+							<option
+								value={PROMOTION_TYPE_FIXED}
+								selected={selectedProduct?.promotion?.type === PROMOTION_TYPE_FIXED}
+							>
+								Montant fixe
+							</option>
+						</select>
+					</div>
+					<div>
+						<label for="edit-promotion-value" class="theme-label">Valeur</label>
+						<input
+							id="edit-promotion-value"
+							name="promotion_value"
+							type="number"
+							min="0"
+							step="0.01"
+							value={form?.action === 'edit-product'
+								? (form.values?.promotionValue ?? String(selectedProduct?.promotion?.value ?? 0))
+								: String(selectedProduct?.promotion?.value ?? 0)}
+							class="theme-input"
+						/>
+					</div>
 				</div>
 				<div class="theme-card image-preview-card p-4">
 					<div>

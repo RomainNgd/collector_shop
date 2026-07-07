@@ -164,13 +164,18 @@ func seedUsers(db *gorm.DB, fixtures []demoUserFixture, report *SeedReport) erro
 }
 
 func seedProducts(db *gorm.DB, fixtures []demoProductFixture, categories map[string]*models.Category, report *SeedReport) error {
+	sellerID, err := defaultSeedSellerID(db)
+	if err != nil {
+		return err
+	}
+
 	for _, fixture := range fixtures {
 		category := categories[fixture.Category]
 		if category == nil {
 			return fmt.Errorf("fixture category %q not found for product %q", fixture.Category, fixture.Name)
 		}
 
-		created, updated, err := upsertProduct(db, fixture, category.ID)
+		created, updated, err := upsertProduct(db, fixture, category.ID, sellerID)
 		if err != nil {
 			return err
 		}
@@ -182,6 +187,17 @@ func seedProducts(db *gorm.DB, fixtures []demoProductFixture, categories map[str
 		}
 	}
 	return nil
+}
+
+func defaultSeedSellerID(db *gorm.DB) (uint, error) {
+	var user models.User
+	if err := db.
+		Where("role = ?", constants.RoleUser).
+		Order("id ASC").
+		First(&user).Error; err != nil {
+		return 0, fmt.Errorf("failed to find default seller for seeded products: %w", err)
+	}
+	return user.ID, nil
 }
 
 func seedPromotions(db *gorm.DB, fixtures []demoPromotionFixture, productIDs map[string]uint, report *SeedReport) error {
@@ -539,7 +555,7 @@ func upsertUser(db *gorm.DB, fixture demoUserFixture) (bool, bool, error) {
 	return false, true, nil
 }
 
-func upsertProduct(db *gorm.DB, fixture demoProductFixture, categoryID uint) (bool, bool, error) {
+func upsertProduct(db *gorm.DB, fixture demoProductFixture, categoryID uint, sellerID uint) (bool, bool, error) {
 	var product models.Product
 	result := db.Where(queryByName, fixture.Name).Limit(1).Find(&product)
 	if result.Error != nil {
@@ -552,6 +568,9 @@ func upsertProduct(db *gorm.DB, fixture demoProductFixture, categoryID uint) (bo
 			Description: fixture.Description,
 			Image:       fixture.Image,
 			Price:       fixture.Price,
+			Stock:       10,
+			IsActive:    true,
+			SellerID:    &sellerID,
 			CategoryID:  categoryID,
 		}
 		if err := db.Create(&product).Error; err != nil {
@@ -572,6 +591,15 @@ func upsertProduct(db *gorm.DB, fixture demoProductFixture, categoryID uint) (bo
 	}
 	if product.CategoryID != categoryID {
 		updates["category_id"] = categoryID
+	}
+	if product.Stock <= 0 {
+		updates["stock"] = 10
+	}
+	if !product.IsActive {
+		updates["is_active"] = true
+	}
+	if product.SellerID == nil || *product.SellerID == 0 {
+		updates["seller_id"] = sellerID
 	}
 
 	if len(updates) == 0 {

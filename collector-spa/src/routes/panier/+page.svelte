@@ -66,6 +66,9 @@
 							<div class="mt-2">
 								<ProductPrice product={item.product} size="sm" />
 							</div>
+							<p class="theme-copy mt-2 text-xs">
+								Vendeur: {item.product.sellerEmail ?? 'Marketplace'} · Stock: {item.product.stock}
+							</p>
 						</div>
 
 						<div class="quantity-control">
