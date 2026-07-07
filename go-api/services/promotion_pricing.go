@@ -67,25 +67,24 @@ func chooseBestPromotion(basePrice float64, promotions []models.Promotion) (floa
 	return bestPrice, applied
 }
 
-func applyProductPricing(product *models.Product, _ []models.Promotion) {
-	product.EffectivePrice = roundCurrency(product.Price)
-	product.AppliedPromotion = nil
+func applyProductPricing(product *models.Product, promotions []models.Promotion) {
+	candidates := make([]models.Promotion, 0, len(promotions)+1)
+	candidates = append(candidates, promotions...)
 
 	if product.PromotionActive {
-		bestPrice, appliedPromotion := chooseBestPromotion(product.Price, []models.Promotion{
-			{
-				Model:        gormModel(product.ID),
-				Name:         "Promotion vendeur",
-				Type:         product.PromotionType,
-				Value:        product.PromotionValue,
-				IsActive:     product.PromotionActive,
-				AppliesToAll: false,
-			},
+		candidates = append(candidates, models.Promotion{
+			Model:        gormModel(product.ID),
+			Name:         "Promotion vendeur",
+			Type:         product.PromotionType,
+			Value:        product.PromotionValue,
+			IsActive:     product.PromotionActive,
+			AppliesToAll: false,
 		})
-		product.EffectivePrice = bestPrice
-		product.AppliedPromotion = appliedPromotion
-		return
 	}
+
+	bestPrice, appliedPromotion := chooseBestPromotion(product.Price, candidates)
+	product.EffectivePrice = bestPrice
+	product.AppliedPromotion = appliedPromotion
 }
 
 func gormModel(id uint) gorm.Model {
