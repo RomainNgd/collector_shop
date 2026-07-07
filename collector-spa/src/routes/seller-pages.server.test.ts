@@ -50,11 +50,181 @@ describe('seller pages', () => {
 			loadSellPage({ locals: { user: null }, fetch: vi.fn() } as never)
 		).rejects.toMatchObject({ status: 303, location: '/login' });
 		await expect(
+			loadSellPage({
+				locals: { user: { id: 2, role: ADMIN_ROLE } },
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/administration' });
+		await expect(
+			loadSellerProductsPage({ locals: { user: null }, fetch: vi.fn() } as never)
+		).rejects.toMatchObject({ status: 303, location: '/login' });
+		await expect(
 			loadSellerProductsPage({
 				locals: { user: { id: 2, role: ADMIN_ROLE } },
 				fetch: vi.fn()
 			} as never)
 		).rejects.toMatchObject({ status: 303, location: '/administration' });
+	});
+
+	it('protects seller product mutation actions from anonymous and admin users', async () => {
+		const update = sellerProductActions.updateProduct!;
+		await expect(
+			update({
+				locals: { user: null },
+				request: requestWithForm('/mes-produits', {}),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/login' });
+		await expect(
+			update({
+				locals: { user: { id: 2, role: ADMIN_ROLE } },
+				request: requestWithForm('/mes-produits', {}),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/administration' });
+
+		const deleteAction = sellerProductActions.deleteProduct!;
+		await expect(
+			deleteAction({
+				locals: { user: { id: 2, role: ADMIN_ROLE } },
+				request: requestWithForm('/mes-produits', { id: '4' }),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/administration' });
+
+		const action = sellActions.default!;
+		await expect(
+			action({
+				locals: { user: null },
+				request: requestWithForm('/vendre', {}),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/login' });
+		await expect(
+			action({
+				locals: { user: { id: 2, role: ADMIN_ROLE } },
+				request: requestWithForm('/vendre', {}),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/administration' });
+	});
+
+	it('validates seller product edge cases for price, category and promotion fields', async () => {
+		const update = sellerProductActions.updateProduct!;
+		const invalidPrice = { ...productForm, price: '-5' };
+		await expect(
+			update({
+				locals: { user },
+				request: requestWithForm('/mes-produits', invalidPrice),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		const invalidCategory = { ...productForm, category_id: '0' };
+		await expect(
+			update({
+				locals: { user },
+				request: requestWithForm('/mes-produits', invalidCategory),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		const invalidPromotionType = {
+			...productForm,
+			promotion_active: 'true',
+			promotion_type: 'unknown'
+		};
+		await expect(
+			update({
+				locals: { user },
+				request: requestWithForm('/mes-produits', invalidPromotionType),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		const invalidPromotionValue = {
+			...productForm,
+			promotion_active: 'true',
+			promotion_value: '0'
+		};
+		await expect(
+			update({
+				locals: { user },
+				request: requestWithForm('/mes-produits', invalidPromotionValue),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		const promotionOverHundred = {
+			...productForm,
+			promotion_active: 'true',
+			promotion_type: PROMOTION_TYPE_PERCENTAGE,
+			promotion_value: '150'
+		};
+		await expect(
+			update({
+				locals: { user },
+				request: requestWithForm('/mes-produits', promotionOverHundred),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+	});
+
+	it('validates sell form edge cases for price, category and promotion fields', async () => {
+		const action = sellActions.default!;
+
+		await expect(
+			action({
+				locals: { user },
+				request: requestWithForm('/vendre', { ...productForm, price: '-5' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			action({
+				locals: { user },
+				request: requestWithForm('/vendre', { ...productForm, category_id: '0' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			action({
+				locals: { user },
+				request: requestWithForm('/vendre', {
+					...productForm,
+					promotion_active: 'true',
+					promotion_type: 'unknown'
+				}),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			action({
+				locals: { user },
+				request: requestWithForm('/vendre', {
+					...productForm,
+					promotion_active: 'true',
+					promotion_value: '0'
+				}),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			action({
+				locals: { user },
+				request: requestWithForm('/vendre', {
+					...productForm,
+					promotion_active: 'true',
+					promotion_type: PROMOTION_TYPE_PERCENTAGE,
+					promotion_value: '150'
+				}),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
 	});
 
 	it('loads sell and seller products pages for authenticated sellers', async () => {

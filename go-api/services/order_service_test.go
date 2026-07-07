@@ -96,6 +96,21 @@ func TestOrderServiceCreateOrderLocksPricing(t *testing.T) {
 	}
 }
 
+func TestOrderServiceCreateOrderRejectsInsufficientStock(t *testing.T) {
+	tx := openIntegrationTx(t)
+	service := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID) // stock: 10
+
+	_, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 999},
+	})
+	if !errors.Is(err, ErrOrderInsufficientStock) {
+		t.Fatalf("expected ErrOrderInsufficientStock, got %v", err)
+	}
+}
+
 func TestOrderServiceCreateOrderRejectsMissingProduct(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewOrderService(tx)
@@ -203,5 +218,74 @@ func TestOrderServiceListOrdersForUser(t *testing.T) {
 	}
 	if orders[0].UserID != user.ID {
 		t.Fatalf("expected user id %d, got %d", user.ID, orders[0].UserID)
+	}
+}
+
+func TestCanUpdateOrderStatus(t *testing.T) {
+	tests := []struct {
+		name          string
+		actorRole     string
+		currentStatus string
+		nextStatus    string
+		want          bool
+	}{
+		{"invalid next status rejected", constants.RoleAdmin, models.OrderStatusAwaitingPayment, "unknown", false},
+		{"same status always allowed", constants.RoleUser, models.OrderStatusAwaitingPayment, models.OrderStatusAwaitingPayment, true},
+		{"user cannot transition", constants.RoleUser, models.OrderStatusAwaitingPayment, models.OrderStatusPreparation, false},
+		{"admin awaiting to preparation", constants.RoleAdmin, models.OrderStatusAwaitingPayment, models.OrderStatusPreparation, true},
+		{"admin awaiting to cancelled", constants.RoleAdmin, models.OrderStatusAwaitingPayment, models.OrderStatusCancelled, true},
+		{"admin awaiting to shipping rejected", constants.RoleAdmin, models.OrderStatusAwaitingPayment, models.OrderStatusShipping, false},
+		{"admin preparation to shipping", constants.RoleAdmin, models.OrderStatusPreparation, models.OrderStatusShipping, true},
+		{"admin preparation to cancelled", constants.RoleAdmin, models.OrderStatusPreparation, models.OrderStatusCancelled, true},
+		{"admin preparation to delivered rejected", constants.RoleAdmin, models.OrderStatusPreparation, models.OrderStatusDelivered, false},
+		{"admin shipping to delivered", constants.RoleAdmin, models.OrderStatusShipping, models.OrderStatusDelivered, true},
+		{"admin shipping to cancelled rejected", constants.RoleAdmin, models.OrderStatusShipping, models.OrderStatusCancelled, false},
+		{"admin delivered to any rejected", constants.RoleAdmin, models.OrderStatusDelivered, models.OrderStatusCancelled, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := canUpdateOrderStatus(tt.actorRole, tt.currentStatus, tt.nextStatus); got != tt.want {
+				t.Fatalf("expected %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestNormalizeOrderItemsMergesDuplicateProducts(t *testing.T) {
+	normalized, err := normalizeOrderItems([]OrderItemInput{
+		{ProductID: 1, Quantity: 2},
+		{ProductID: 2, Quantity: 1},
+		{ProductID: 1, Quantity: 3},
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if len(normalized) != 2 {
+		t.Fatalf("expected 2 normalized items, got %d", len(normalized))
+	}
+	if normalized[0].ProductID != 1 || normalized[0].Quantity != 5 {
+		t.Fatalf("expected merged quantity 5 for product 1, got %#v", normalized[0])
+	}
+}
+
+func TestNormalizeOrderItemsRejectsInvalidInput(t *testing.T) {
+	if _, err := normalizeOrderItems(nil); !errors.Is(err, ErrOrderEmpty) {
+		t.Fatalf("expected ErrOrderEmpty, got %v", err)
+	}
+	if _, err := normalizeOrderItems([]OrderItemInput{{ProductID: 0, Quantity: 1}}); !errors.Is(err, ErrOrderProductNotFound) {
+		t.Fatalf("expected ErrOrderProductNotFound, got %v", err)
+	}
+	if _, err := normalizeOrderItems([]OrderItemInput{{ProductID: 1, Quantity: 0}}); !errors.Is(err, ErrOrderInvalidQuantity) {
+		t.Fatalf("expected ErrOrderInvalidQuantity, got %v", err)
+	}
+}
+
+func TestProductSellerID(t *testing.T) {
+	if got := productSellerID(&models.Product{}); got != 0 {
+		t.Fatalf("expected 0 for nil seller id, got %d", got)
+	}
+	sellerID := uint(9)
+	if got := productSellerID(&models.Product{SellerID: &sellerID}); got != sellerID {
+		t.Fatalf("expected %d, got %d", sellerID, got)
 	}
 }

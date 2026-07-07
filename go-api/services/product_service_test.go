@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"poc-gin/models"
+	"poc-gin/pkg/constants"
 	"testing"
 	"time"
 
@@ -159,6 +160,315 @@ func TestProductServiceDeleteNotFound(t *testing.T) {
 	err := service.DeleteProduct(context.Background(), user.ID, user.Role, 999999)
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
+	}
+}
+
+func TestProductServiceGetProductsForSeller(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+	seller := seedUser(t, tx, constants.RoleUser)
+	otherSeller := seedUser(t, tx, constants.RoleUser)
+	service := NewProductService(tx)
+
+	product := &models.Product{
+		Name:        fmt.Sprintf("Seller-Product-%d", time.Now().UnixNano()),
+		Description: "For sale",
+		Image:       "image.png",
+		Price:       15,
+		Stock:       2,
+		IsActive:    true,
+		SellerID:    &seller.ID,
+		CategoryID:  category.ID,
+	}
+	if err := tx.Create(product).Error; err != nil {
+		t.Fatalf("failed to seed seller product: %v", err)
+	}
+	otherProduct := &models.Product{
+		Name:        fmt.Sprintf("Other-Seller-Product-%d", time.Now().UnixNano()),
+		Description: "Not for this seller",
+		Image:       "image.png",
+		Price:       15,
+		Stock:       2,
+		IsActive:    true,
+		SellerID:    &otherSeller.ID,
+		CategoryID:  category.ID,
+	}
+	if err := tx.Create(otherProduct).Error; err != nil {
+		t.Fatalf("failed to seed other seller product: %v", err)
+	}
+
+	products, err := service.GetProductsForSeller(context.Background(), seller.ID)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if len(products) != 1 {
+		t.Fatalf("expected exactly one product for seller, got %d", len(products))
+	}
+	if products[0].ID != product.ID {
+		t.Fatalf("expected product %d, got %d", product.ID, products[0].ID)
+	}
+	if products[0].SellerEmail != seller.Email {
+		t.Fatalf("expected seller email populated, got %q", products[0].SellerEmail)
+	}
+}
+
+func TestProductServiceCreateProductRejectsInvalidData(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+	seller := seedUser(t, tx, constants.RoleUser)
+	service := NewProductService(tx)
+
+	baseProduct := func() *models.Product {
+		return &models.Product{
+			Name:        fmt.Sprintf("Invalid-%d", time.Now().UnixNano()),
+			Description: "Test",
+			Image:       "image.png",
+			Price:       10,
+			Stock:       5,
+			IsActive:    true,
+			SellerID:    &seller.ID,
+			CategoryID:  category.ID,
+		}
+	}
+
+	t.Run("missing seller", func(t *testing.T) {
+		product := baseProduct()
+		product.SellerID = nil
+		err := service.CreateProduct(context.Background(), product)
+		if !errors.Is(err, ErrProductSellerRequired) {
+			t.Fatalf("expected ErrProductSellerRequired, got %v", err)
+		}
+	})
+
+	t.Run("invalid stock", func(t *testing.T) {
+		product := baseProduct()
+		product.Stock = 0
+		err := service.CreateProduct(context.Background(), product)
+		if !errors.Is(err, ErrProductInvalidStock) {
+			t.Fatalf("expected ErrProductInvalidStock, got %v", err)
+		}
+	})
+
+	t.Run("invalid promotion type", func(t *testing.T) {
+		product := baseProduct()
+		product.PromotionActive = true
+		product.PromotionType = "unknown"
+		product.PromotionValue = 10
+		err := service.CreateProduct(context.Background(), product)
+		if !errors.Is(err, ErrProductInvalidPromotionType) {
+			t.Fatalf("expected ErrProductInvalidPromotionType, got %v", err)
+		}
+	})
+
+	t.Run("invalid promotion value", func(t *testing.T) {
+		product := baseProduct()
+		product.PromotionActive = true
+		product.PromotionType = models.PromotionTypePercentage
+		product.PromotionValue = 150
+		err := service.CreateProduct(context.Background(), product)
+		if !errors.Is(err, ErrProductInvalidPromotionValue) {
+			t.Fatalf("expected ErrProductInvalidPromotionValue, got %v", err)
+		}
+	})
+}
+
+func TestProductServiceUpdateProductAccessControl(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+	seller := seedUser(t, tx, constants.RoleUser)
+	otherUser := seedUser(t, tx, constants.RoleUser)
+	admin := seedUser(t, tx, constants.RoleAdmin)
+	product := seedProduct(t, tx, category.ID)
+	product.SellerID = &seller.ID
+	if err := tx.Save(product).Error; err != nil {
+		t.Fatalf("failed to assign seller: %v", err)
+	}
+	service := NewProductService(tx)
+
+	t.Run("owner can update", func(t *testing.T) {
+		updated, err := service.UpdateProduct(context.Background(), seller.ID, seller.Role, product.ID, map[string]interface{}{"stock": 4})
+		if err != nil {
+			t.Fatalf("expected owner update success, got %v", err)
+		}
+		if updated.Stock != 4 {
+			t.Fatalf("expected stock 4, got %d", updated.Stock)
+		}
+	})
+
+	t.Run("admin can update", func(t *testing.T) {
+		if _, err := service.UpdateProduct(context.Background(), admin.ID, admin.Role, product.ID, map[string]interface{}{"stock": 6}); err != nil {
+			t.Fatalf("expected admin update success, got %v", err)
+		}
+	})
+
+	t.Run("other user is denied", func(t *testing.T) {
+		_, err := service.UpdateProduct(context.Background(), otherUser.ID, otherUser.Role, product.ID, map[string]interface{}{"stock": 8})
+		if !errors.Is(err, ErrProductAccessDenied) {
+			t.Fatalf("expected ErrProductAccessDenied, got %v", err)
+		}
+	})
+
+	t.Run("invalid stock update rejected", func(t *testing.T) {
+		_, err := service.UpdateProduct(context.Background(), seller.ID, seller.Role, product.ID, map[string]interface{}{"stock": "not-a-number"})
+		if !errors.Is(err, ErrProductInvalidStock) {
+			t.Fatalf("expected ErrProductInvalidStock, got %v", err)
+		}
+	})
+
+	t.Run("invalid promotion active update rejected", func(t *testing.T) {
+		_, err := service.UpdateProduct(context.Background(), seller.ID, seller.Role, product.ID, map[string]interface{}{"promotion_active": "not-a-bool"})
+		if !errors.Is(err, ErrProductInvalidPromotionValue) {
+			t.Fatalf("expected ErrProductInvalidPromotionValue, got %v", err)
+		}
+	})
+
+	t.Run("invalid promotion value update rejected", func(t *testing.T) {
+		_, err := service.UpdateProduct(context.Background(), seller.ID, seller.Role, product.ID, map[string]interface{}{
+			"promotion_active": true,
+			"promotion_type":   models.PromotionTypeFixed,
+			"promotion_value":  "not-a-number",
+		})
+		if !errors.Is(err, ErrProductInvalidPromotionValue) {
+			t.Fatalf("expected ErrProductInvalidPromotionValue, got %v", err)
+		}
+	})
+}
+
+func TestProductServiceDeleteProductAccessControl(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+	seller := seedUser(t, tx, constants.RoleUser)
+	otherUser := seedUser(t, tx, constants.RoleUser)
+	product := seedProduct(t, tx, category.ID)
+	product.SellerID = &seller.ID
+	if err := tx.Save(product).Error; err != nil {
+		t.Fatalf("failed to assign seller: %v", err)
+	}
+	service := NewProductService(tx)
+
+	err := service.DeleteProduct(context.Background(), otherUser.ID, otherUser.Role, product.ID)
+	if !errors.Is(err, ErrProductAccessDenied) {
+		t.Fatalf("expected ErrProductAccessDenied, got %v", err)
+	}
+
+	if err := service.DeleteProduct(context.Background(), seller.ID, seller.Role, product.ID); err != nil {
+		t.Fatalf("expected owner delete success, got %v", err)
+	}
+}
+
+func TestCanManageProduct(t *testing.T) {
+	sellerID := uint(5)
+	tests := []struct {
+		name     string
+		actorID  uint
+		role     string
+		sellerID *uint
+		want     bool
+	}{
+		{"admin can always manage", 1, constants.RoleAdmin, nil, true},
+		{"owner can manage", 5, constants.RoleUser, &sellerID, true},
+		{"non-owner cannot manage", 6, constants.RoleUser, &sellerID, false},
+		{"nil seller cannot be managed by user", 5, constants.RoleUser, nil, false},
+		{"zero actor id cannot manage", 0, constants.RoleUser, &sellerID, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := canManageProduct(tt.actorID, tt.role, tt.sellerID); got != tt.want {
+				t.Fatalf("expected %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestPopulateProductSellerEmail(t *testing.T) {
+	populateProductSellerEmail(nil)
+
+	product := &models.Product{Seller: models.User{Email: "seller@example.com"}}
+	populateProductSellerEmail(product)
+	if product.SellerEmail != "seller@example.com" {
+		t.Fatalf("expected seller email populated, got %q", product.SellerEmail)
+	}
+}
+
+func TestValidateProductPromotion(t *testing.T) {
+	tests := []struct {
+		name          string
+		active        bool
+		promotionType string
+		value         float64
+		wantErr       error
+	}{
+		{"inactive skips validation", false, "unknown", -5, nil},
+		{"valid percentage", true, models.PromotionTypePercentage, 50, nil},
+		{"percentage too high", true, models.PromotionTypePercentage, 101, ErrProductInvalidPromotionValue},
+		{"percentage zero invalid", true, models.PromotionTypePercentage, 0, ErrProductInvalidPromotionValue},
+		{"valid fixed", true, models.PromotionTypeFixed, 10, nil},
+		{"fixed zero invalid", true, models.PromotionTypeFixed, 0, ErrProductInvalidPromotionValue},
+		{"unknown type invalid", true, "unknown", 10, ErrProductInvalidPromotionType},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateProductPromotion(tt.active, tt.promotionType, tt.value)
+			if tt.wantErr == nil && err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Fatalf("expected %v, got %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestIntFromUpdate(t *testing.T) {
+	tests := []struct {
+		name   string
+		value  interface{}
+		want   int
+		wantOK bool
+	}{
+		{"int", 5, 5, true},
+		{"uint", uint(7), 7, true},
+		{"uint overflow", ^uint(0), 0, false},
+		{"unsupported type", "5", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := intFromUpdate(tt.value)
+			if ok != tt.wantOK || (ok && got != tt.want) {
+				t.Fatalf("expected (%d, %v), got (%d, %v)", tt.want, tt.wantOK, got, ok)
+			}
+		})
+	}
+}
+
+func TestFloatFromUpdate(t *testing.T) {
+	tests := []struct {
+		name   string
+		value  interface{}
+		want   float64
+		wantOK bool
+	}{
+		{"float64", float64(1.5), 1.5, true},
+		{"float32", float32(2.5), 2.5, true},
+		{"int", 3, 3, true},
+		{"unsupported type", "3", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := floatFromUpdate(tt.value)
+			if ok != tt.wantOK || (ok && got != tt.want) {
+				t.Fatalf("expected (%f, %v), got (%f, %v)", tt.want, tt.wantOK, got, ok)
+			}
+		})
+	}
+}
+
+func TestBoolFromUpdate(t *testing.T) {
+	if v, ok := boolFromUpdate(true); !ok || !v {
+		t.Fatalf("expected (true, true), got (%v, %v)", v, ok)
+	}
+	if v, ok := boolFromUpdate("true"); ok || v {
+		t.Fatalf("expected (false, false), got (%v, %v)", v, ok)
 	}
 }
 
