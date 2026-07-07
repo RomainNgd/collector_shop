@@ -12,6 +12,8 @@ jobs:
   push-images:
     name: Push Docker Images
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       DOCKERHUB_USERNAME: ${{ secrets.dockerhub_username }}
       DOCKERHUB_TOKEN: ${{ secrets.dockerhub_token }}
@@ -36,6 +38,11 @@ jobs:
         if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         uses: docker/setup-buildx-action@v3
 
+      - name: Derive image tag
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+        shell: bash
+        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
       - name: Publish go-api image
         if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         uses: docker/build-push-action@v6
@@ -44,7 +51,7 @@ jobs:
           file: build/docker/go-api.Dockerfile
           push: true
           tags: |
-            docker.io/${{ env.DOCKERHUB_USERNAME }}/go-api:${{ github.sha }}
+            docker.io/${{ env.DOCKERHUB_USERNAME }}/go-api:${{ env.IMAGE_TAG }}
             docker.io/${{ env.DOCKERHUB_USERNAME }}/go-api:latest
 
       - name: Publish collector-spa image
@@ -55,5 +62,26 @@ jobs:
           file: build/docker/collector-spa.Dockerfile
           push: true
           tags: |
-            docker.io/${{ env.DOCKERHUB_USERNAME }}/collector-spa:${{ github.sha }}
+            docker.io/${{ env.DOCKERHUB_USERNAME }}/collector-spa:${{ env.IMAGE_TAG }}
             docker.io/${{ env.DOCKERHUB_USERNAME }}/collector-spa:latest
+
+      - name: Bump image tags in k3s manifests
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+        shell: bash
+        run: |
+          sed -i -E "s#(image: [^:[:space:]]+/go-api):[A-Za-z0-9_.-]+#\1:${IMAGE_TAG}#" prod/k3s/go-api.yaml
+          sed -i -E "s#(image: [^:[:space:]]+/collector-spa):[A-Za-z0-9_.-]+#\1:${IMAGE_TAG}#" prod/k3s/collector-spa.yaml
+
+      - name: Commit and push manifest update
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prod/k3s/go-api.yaml prod/k3s/collector-spa.yaml
+          if git diff --cached --quiet; then
+            echo "No manifest changes to commit."
+          else
+            git commit -m "chore(deploy): bump image tags to ${IMAGE_TAG} [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
