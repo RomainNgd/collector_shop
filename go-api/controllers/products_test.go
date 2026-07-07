@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"poc-gin/models"
+	"poc-gin/pkg/constants"
 	"poc-gin/services"
 	"strings"
 	"testing"
@@ -17,11 +18,14 @@ import (
 
 func productPayload() map[string]any {
 	return map[string]any{
-		"name":        "Blue Eyes",
-		"description": "Mint card",
-		"image":       "image.png",
-		"price":       19.99,
-		"category_id": 2,
+		"name":             "Blue Eyes",
+		"description":      "Mint card",
+		"image":            "image.png",
+		"price":            19.99,
+		"stock":            3,
+		"is_active":        true,
+		"category_id":      2,
+		"promotion_active": false,
 	}
 }
 
@@ -84,7 +88,7 @@ func TestProductHandlerFindOneProduct(t *testing.T) {
 func TestProductHandlerCreateProduct(t *testing.T) {
 	t.Run("returns 400 for invalid payload", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{}, &mockCategoryService{}, &mockFileService{})
-		recorder := performJSONRequest(handler.CreateProduct, http.MethodPost, "/products", map[string]any{"name": "A"})
+		recorder := performAuthenticatedJSONRequest(handler.CreateProduct, http.MethodPost, "/products", map[string]any{"name": "A"})
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", recorder.Code)
 		}
@@ -94,7 +98,7 @@ func TestProductHandlerCreateProduct(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{}, &mockCategoryService{
 			getByIDFn: func(id uint) (*models.Category, error) { return nil, gorm.ErrRecordNotFound },
 		}, &mockFileService{})
-		recorder := performJSONRequest(handler.CreateProduct, http.MethodPost, "/products", productPayload())
+		recorder := performAuthenticatedJSONRequest(handler.CreateProduct, http.MethodPost, "/products", productPayload())
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", recorder.Code)
 		}
@@ -104,7 +108,7 @@ func TestProductHandlerCreateProduct(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{}, &mockCategoryService{
 			getByIDFn: func(id uint) (*models.Category, error) { return nil, errors.New("db error") },
 		}, &mockFileService{})
-		recorder := performJSONRequest(handler.CreateProduct, http.MethodPost, "/products", productPayload())
+		recorder := performAuthenticatedJSONRequest(handler.CreateProduct, http.MethodPost, "/products", productPayload())
 		if recorder.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d", recorder.Code)
 		}
@@ -121,12 +125,12 @@ func TestProductHandlerCreateProduct(t *testing.T) {
 			getByIDFn: func(id uint) (*models.Category, error) { return &models.Category{}, nil },
 		}, &mockFileService{})
 
-		recorder := performJSONRequest(handler.CreateProduct, http.MethodPost, "/products", productPayload())
+		recorder := performAuthenticatedJSONRequest(handler.CreateProduct, http.MethodPost, "/products", productPayload())
 		if recorder.Code != http.StatusCreated {
 			t.Fatalf("expected 201, got %d", recorder.Code)
 		}
-		if created == nil || created.CategoryID != 2 {
-			t.Fatalf("expected category id 2, got %#v", created)
+		if created == nil || created.CategoryID != 2 || created.SellerID == nil || *created.SellerID != 1 || created.Stock != 3 {
+			t.Fatalf("expected seller, stock and category to be assigned, got %#v", created)
 		}
 	})
 }
@@ -134,7 +138,7 @@ func TestProductHandlerCreateProduct(t *testing.T) {
 func TestProductHandlerUpdateProduct(t *testing.T) {
 	t.Run("returns 400 for invalid id", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{}, &mockCategoryService{}, &mockFileService{})
-		recorder := performJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/abc", productPayload(), gin.Param{Key: "id", Value: "abc"})
+		recorder := performAuthenticatedJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/abc", productPayload(), gin.Param{Key: "id", Value: "abc"})
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", recorder.Code)
 		}
@@ -142,7 +146,7 @@ func TestProductHandlerUpdateProduct(t *testing.T) {
 
 	t.Run("returns 400 for invalid payload", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{}, &mockCategoryService{}, &mockFileService{})
-		recorder := performJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/1", map[string]any{"name": "A"}, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/1", map[string]any{"name": "A"}, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", recorder.Code)
 		}
@@ -152,7 +156,7 @@ func TestProductHandlerUpdateProduct(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{}, &mockCategoryService{
 			getByIDFn: func(id uint) (*models.Category, error) { return nil, gorm.ErrRecordNotFound },
 		}, &mockFileService{})
-		recorder := performJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/1", productPayload(), gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/1", productPayload(), gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", recorder.Code)
 		}
@@ -160,13 +164,13 @@ func TestProductHandlerUpdateProduct(t *testing.T) {
 
 	t.Run("returns 404 when product is missing", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			updateFn: func(id uint, updates map[string]interface{}) (*models.Product, error) {
+			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 				return nil, gorm.ErrRecordNotFound
 			},
 		}, &mockCategoryService{
 			getByIDFn: func(id uint) (*models.Category, error) { return &models.Category{}, nil },
 		}, &mockFileService{})
-		recorder := performJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/1", productPayload(), gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/1", productPayload(), gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", recorder.Code)
 		}
@@ -175,14 +179,14 @@ func TestProductHandlerUpdateProduct(t *testing.T) {
 	t.Run("returns 200 on success", func(t *testing.T) {
 		var updates map[string]interface{}
 		handler := NewProductHandler(&mockProductService{
-			updateFn: func(id uint, in map[string]interface{}) (*models.Product, error) {
+			updateFn: func(actorID uint, actorRole string, id uint, in map[string]interface{}) (*models.Product, error) {
 				updates = in
 				return &models.Product{Name: "Blue Eyes", CategoryID: 2}, nil
 			},
 		}, &mockCategoryService{
 			getByIDFn: func(id uint) (*models.Category, error) { return &models.Category{}, nil },
 		}, &mockFileService{})
-		recorder := performJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/1", productPayload(), gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedJSONRequest(handler.UpdateProduct, http.MethodPut, "/products/1", productPayload(), gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", recorder.Code)
 		}
@@ -195,7 +199,7 @@ func TestProductHandlerUpdateProduct(t *testing.T) {
 func TestProductHandlerDeleteProduct(t *testing.T) {
 	t.Run("returns 400 for invalid id", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{}, &mockCategoryService{}, &mockFileService{})
-		recorder := performJSONRequest(handler.DeleteProduct, http.MethodDelete, "/products/abc", nil, gin.Param{Key: "id", Value: "abc"})
+		recorder := performAuthenticatedJSONRequest(handler.DeleteProduct, http.MethodDelete, "/products/abc", nil, gin.Param{Key: "id", Value: "abc"})
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", recorder.Code)
 		}
@@ -203,9 +207,9 @@ func TestProductHandlerDeleteProduct(t *testing.T) {
 
 	t.Run("returns 404 when product is missing", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			deleteFn: func(id uint) error { return gorm.ErrRecordNotFound },
+			deleteFn: func(actorID uint, actorRole string, id uint) error { return gorm.ErrRecordNotFound },
 		}, &mockCategoryService{}, &mockFileService{})
-		recorder := performJSONRequest(handler.DeleteProduct, http.MethodDelete, "/products/1", nil, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedJSONRequest(handler.DeleteProduct, http.MethodDelete, "/products/1", nil, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", recorder.Code)
 		}
@@ -213,9 +217,9 @@ func TestProductHandlerDeleteProduct(t *testing.T) {
 
 	t.Run("returns 200 on success", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			deleteFn: func(id uint) error { return nil },
+			deleteFn: func(actorID uint, actorRole string, id uint) error { return nil },
 		}, &mockCategoryService{}, &mockFileService{})
-		recorder := performJSONRequest(handler.DeleteProduct, http.MethodDelete, "/products/1", nil, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedJSONRequest(handler.DeleteProduct, http.MethodDelete, "/products/1", nil, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", recorder.Code)
 		}
@@ -255,11 +259,22 @@ func performMultipartRequest(handlerFunc gin.HandlerFunc, req *http.Request, par
 	return recorder
 }
 
+func performAuthenticatedMultipartRequest(handlerFunc gin.HandlerFunc, req *http.Request, params ...gin.Param) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = req
+	ctx.Params = params
+	ctx.Set(constants.ContextKeyUserID, uint(1))
+	ctx.Set(constants.ContextKeyUserRole, constants.RoleUser)
+	handlerFunc(ctx)
+	return recorder
+}
+
 func TestProductHandlerUploadProductImage(t *testing.T) {
 	t.Run("returns 400 for invalid id", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{}, &mockCategoryService{}, &mockFileService{})
 		req, _ := http.NewRequest(http.MethodPost, "/products/abc/image", strings.NewReader(""))
-		recorder := performMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "abc"})
+		recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "abc"})
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", recorder.Code)
 		}
@@ -270,7 +285,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 			getByIDFn: func(id uint) (*models.Product, error) { return nil, gorm.ErrRecordNotFound },
 		}, &mockCategoryService{}, &mockFileService{})
 		req, _ := http.NewRequest(http.MethodPost, "/products/1/image", strings.NewReader(""))
-		recorder := performMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", recorder.Code)
 		}
@@ -281,7 +296,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{}, nil },
 		}, &mockCategoryService{}, &mockFileService{})
 		req, _ := http.NewRequest(http.MethodPost, "/products/1/image", strings.NewReader(""))
-		recorder := performMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", recorder.Code)
 		}
@@ -304,7 +319,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 					saveFn: func(file *multipart.FileHeader) (string, error) { return "", tc.err },
 				})
 				req := newMultipartImageRequest(t, http.MethodPost, "/products/1/image", "image", "photo.png")
-				recorder := performMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
+				recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
 				if recorder.Code != http.StatusBadRequest {
 					t.Fatalf("expected 400, got %d", recorder.Code)
 				}
@@ -319,7 +334,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 			saveFn: func(file *multipart.FileHeader) (string, error) { return "", errors.New("disk full") },
 		})
 		req := newMultipartImageRequest(t, http.MethodPost, "/products/1/image", "image", "photo.png")
-		recorder := performMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d", recorder.Code)
 		}
@@ -331,7 +346,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 			getByIDFn: func(id uint) (*models.Product, error) {
 				return &models.Product{Image: "old.png"}, nil
 			},
-			updateFn: func(id uint, updates map[string]interface{}) (*models.Product, error) {
+			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 				return &models.Product{Image: updates["image"].(string)}, nil
 			},
 		}, &mockCategoryService{}, &mockFileService{
@@ -342,7 +357,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 			},
 		})
 		req := newMultipartImageRequest(t, http.MethodPost, "/products/1/image", "image", "photo.png")
-		recorder := performMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", recorder.Code)
 		}
@@ -355,7 +370,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 		var deletedNew string
 		handler := NewProductHandler(&mockProductService{
 			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{}, nil },
-			updateFn: func(id uint, updates map[string]interface{}) (*models.Product, error) {
+			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 				return nil, errors.New("db error")
 			},
 		}, &mockCategoryService{}, &mockFileService{
@@ -366,7 +381,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 			},
 		})
 		req := newMultipartImageRequest(t, http.MethodPost, "/products/1/image", "image", "photo.png")
-		recorder := performMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d", recorder.Code)
 		}
@@ -379,7 +394,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 func TestProductHandlerDeleteProductImage(t *testing.T) {
 	t.Run("returns 400 for invalid id", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{}, &mockCategoryService{}, &mockFileService{})
-		recorder := performJSONRequest(handler.DeleteProductImage, http.MethodDelete, "/products/abc/image", nil, gin.Param{Key: "id", Value: "abc"})
+		recorder := performAuthenticatedJSONRequest(handler.DeleteProductImage, http.MethodDelete, "/products/abc/image", nil, gin.Param{Key: "id", Value: "abc"})
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", recorder.Code)
 		}
@@ -389,7 +404,7 @@ func TestProductHandlerDeleteProductImage(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
 			getByIDFn: func(id uint) (*models.Product, error) { return nil, gorm.ErrRecordNotFound },
 		}, &mockCategoryService{}, &mockFileService{})
-		recorder := performJSONRequest(handler.DeleteProductImage, http.MethodDelete, "/products/1/image", nil, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedJSONRequest(handler.DeleteProductImage, http.MethodDelete, "/products/1/image", nil, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", recorder.Code)
 		}
@@ -398,13 +413,13 @@ func TestProductHandlerDeleteProductImage(t *testing.T) {
 	t.Run("returns 200 and ignores image deletion error", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
 			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{Image: "old.png"}, nil },
-			updateFn: func(id uint, updates map[string]interface{}) (*models.Product, error) {
+			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 				return &models.Product{Image: ""}, nil
 			},
 		}, &mockCategoryService{}, &mockFileService{
 			deleteFn: func(filename string) error { return errors.New("fs error") },
 		})
-		recorder := performJSONRequest(handler.DeleteProductImage, http.MethodDelete, "/products/1/image", nil, gin.Param{Key: "id", Value: "1"})
+		recorder := performAuthenticatedJSONRequest(handler.DeleteProductImage, http.MethodDelete, "/products/1/image", nil, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", recorder.Code)
 		}

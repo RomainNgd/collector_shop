@@ -14,11 +14,15 @@ import (
 func seedProduct(t *testing.T, tx *gorm.DB, categoryID uint) *models.Product {
 	t.Helper()
 
+	seller := seedUser(t, tx, "ROLE_USER")
 	product := &models.Product{
 		Name:        fmt.Sprintf("Product-%d", time.Now().UnixNano()),
 		Description: "Test product",
 		Image:       "image.png",
 		Price:       10.5,
+		Stock:       10,
+		IsActive:    true,
+		SellerID:    &seller.ID,
 		CategoryID:  categoryID,
 	}
 	if err := tx.Create(product).Error; err != nil {
@@ -33,6 +37,7 @@ func TestProductServiceCRUDAndPreload(t *testing.T) {
 		t.Fatalf("failed to clear global promotions: %v", err)
 	}
 	category := seedCategory(t, tx)
+	seller := seedUser(t, tx, "ROLE_USER")
 	service := NewProductService(tx)
 
 	product := &models.Product{
@@ -40,6 +45,9 @@ func TestProductServiceCRUDAndPreload(t *testing.T) {
 		Description: "Mint card",
 		Image:       "blue-eyes.png",
 		Price:       19.99,
+		Stock:       5,
+		IsActive:    true,
+		SellerID:    &seller.ID,
 		CategoryID:  category.ID,
 	}
 
@@ -72,9 +80,10 @@ func TestProductServiceCRUDAndPreload(t *testing.T) {
 		t.Fatal("expected at least one product")
 	}
 
-	updated, err := service.UpdateProduct(context.Background(), product.ID, map[string]interface{}{
+	updated, err := service.UpdateProduct(context.Background(), seller.ID, seller.Role, product.ID, map[string]interface{}{
 		"name":  product.Name + "-updated",
 		"price": 29.99,
+		"stock": 7,
 	})
 	if err != nil {
 		t.Fatalf("expected update success, got %v", err)
@@ -89,59 +98,32 @@ func TestProductServiceCRUDAndPreload(t *testing.T) {
 		t.Fatalf("expected no promotion on update, got effective=%f promotion=%#v", updated.EffectivePrice, updated.AppliedPromotion)
 	}
 
-	if err := service.DeleteProduct(context.Background(), product.ID); err != nil {
+	if err := service.DeleteProduct(context.Background(), seller.ID, seller.Role, product.ID); err != nil {
 		t.Fatalf("expected delete success, got %v", err)
 	}
 }
 
-func TestProductServiceAppliesBestPromotion(t *testing.T) {
+func TestProductServiceAppliesSellerPromotion(t *testing.T) {
 	tx := openIntegrationTx(t)
 	category := seedCategory(t, tx)
+	seller := seedUser(t, tx, "ROLE_USER")
 	service := NewProductService(tx)
 
 	productA := &models.Product{
-		Name:        "Console",
-		Description: "Limited edition",
-		Image:       "console.png",
-		Price:       100,
-		CategoryID:  category.ID,
-	}
-	productB := &models.Product{
-		Name:        "Binder",
-		Description: "Premium binder",
-		Image:       "binder.png",
-		Price:       40,
-		CategoryID:  category.ID,
+		Name:            fmt.Sprintf("Console-%d", time.Now().UnixNano()),
+		Description:     "Limited edition",
+		Image:           "console.png",
+		Price:           100,
+		Stock:           3,
+		IsActive:        true,
+		SellerID:        &seller.ID,
+		CategoryID:      category.ID,
+		PromotionType:   models.PromotionTypePercentage,
+		PromotionValue:  20,
+		PromotionActive: true,
 	}
 	if err := tx.Create(productA).Error; err != nil {
 		t.Fatalf("failed to create product A: %v", err)
-	}
-	if err := tx.Create(productB).Error; err != nil {
-		t.Fatalf("failed to create product B: %v", err)
-	}
-
-	globalPromotion := &models.Promotion{
-		Name:         "Global",
-		Type:         models.PromotionTypeFixed,
-		Value:        5,
-		IsActive:     true,
-		AppliesToAll: true,
-	}
-	targetedPromotion := &models.Promotion{
-		Name:         "Targeted",
-		Type:         models.PromotionTypePercentage,
-		Value:        20,
-		IsActive:     true,
-		AppliesToAll: false,
-	}
-	if err := tx.Create(globalPromotion).Error; err != nil {
-		t.Fatalf("failed to create global promotion: %v", err)
-	}
-	if err := tx.Create(targetedPromotion).Error; err != nil {
-		t.Fatalf("failed to create targeted promotion: %v", err)
-	}
-	if err := tx.Model(targetedPromotion).Association("Products").Append(productA); err != nil {
-		t.Fatalf("failed to link targeted promotion: %v", err)
 	}
 
 	foundA, err := service.GetProductByID(context.Background(), productA.ID)
@@ -151,19 +133,8 @@ func TestProductServiceAppliesBestPromotion(t *testing.T) {
 	if foundA.EffectivePrice != 80 {
 		t.Fatalf("expected product A effective price 80, got %f", foundA.EffectivePrice)
 	}
-	if foundA.AppliedPromotion == nil || foundA.AppliedPromotion.ID != targetedPromotion.ID {
-		t.Fatalf("expected targeted promotion for product A, got %#v", foundA.AppliedPromotion)
-	}
-
-	foundB, err := service.GetProductByID(context.Background(), productB.ID)
-	if err != nil {
-		t.Fatalf("expected product B lookup success, got %v", err)
-	}
-	if foundB.EffectivePrice != 35 {
-		t.Fatalf("expected product B effective price 35, got %f", foundB.EffectivePrice)
-	}
-	if foundB.AppliedPromotion == nil || foundB.AppliedPromotion.ID != globalPromotion.ID {
-		t.Fatalf("expected global promotion for product B, got %#v", foundB.AppliedPromotion)
+	if foundA.AppliedPromotion == nil || foundA.AppliedPromotion.Type != models.PromotionTypePercentage {
+		t.Fatalf("expected seller promotion for product A, got %#v", foundA.AppliedPromotion)
 	}
 }
 
@@ -171,7 +142,9 @@ func TestProductServiceUpdateNotFound(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewProductService(tx)
 
-	_, err := service.UpdateProduct(context.Background(), 999999, map[string]interface{}{"name": "x"})
+	user := seedUser(t, tx, "ROLE_USER")
+
+	_, err := service.UpdateProduct(context.Background(), user.ID, user.Role, 999999, map[string]interface{}{"name": "x"})
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}
@@ -181,7 +154,9 @@ func TestProductServiceDeleteNotFound(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewProductService(tx)
 
-	err := service.DeleteProduct(context.Background(), 999999)
+	user := seedUser(t, tx, "ROLE_USER")
+
+	err := service.DeleteProduct(context.Background(), user.ID, user.Role, 999999)
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}

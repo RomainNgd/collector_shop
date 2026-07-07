@@ -173,16 +173,16 @@ func runSeed(cfg *config.Config) error {
 	}
 
 	logger.Info("Demo data seeded successfully: %s", report.Summary())
-	logger.Info("Seeded accounts: admin@collector.local / Admin123!, user@collector.local / User123!, collector@collector.local / Collector123!")
+	logger.Info("Seeded accounts")
 	return nil
 }
 
 func migrateDatabase(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&models.Category{},
+		&models.User{},
 		&models.Product{},
 		&models.Promotion{},
-		&models.User{},
 		&models.Order{},
 		&models.OrderItem{},
 	)

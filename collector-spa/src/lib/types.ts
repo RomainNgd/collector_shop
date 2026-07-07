@@ -48,6 +48,10 @@ export interface Product {
 	imageName: string | null;
 	categoryId: number | null;
 	category: string;
+	sellerId: number | null;
+	sellerEmail: string | null;
+	stock: number;
+	isActive: boolean;
 	promotion: PromotionSummary | null;
 }
 
@@ -59,6 +63,8 @@ export interface CartItem {
 export interface OrderItem {
 	id: number;
 	productId: number;
+	sellerId: number | null;
+	sellerEmail: string | null;
 	productName: string;
 	productDescription: string;
 	productImageUrl: string;
@@ -101,10 +107,17 @@ export interface ApiProduct {
 	price: number;
 	effective_price?: number;
 	image: string;
+	stock?: number;
+	is_active?: boolean;
+	seller_id?: number;
+	seller_email?: string;
 	category?: string | ApiCategory;
 	category_id?: number;
 	CategoryID?: number;
 	applied_promotion?: ApiAppliedPromotion | null;
+	promotion_type?: string;
+	promotion_value?: number;
+	promotion_active?: boolean;
 }
 
 export interface Category {
@@ -144,6 +157,8 @@ export interface ApiPromotion {
 export interface ApiOrderItem {
 	ID: number;
 	product_id?: number;
+	seller_id?: number;
+	seller_email?: string;
 	product_name: string;
 	product_description: string;
 	product_image: string;
@@ -273,6 +288,17 @@ export const mapApiProduct = (item: ApiProduct, apiBaseUrl: string): Product => 
 	categoryId: getProductCategoryId(item),
 	category:
 		typeof item.category === 'string' ? item.category : (item.category?.name ?? 'non-classe'),
+	sellerId:
+		typeof item.seller_id === 'number' && Number.isFinite(item.seller_id) ? item.seller_id : null,
+	sellerEmail:
+		typeof item.seller_email === 'string' && item.seller_email.trim() !== ''
+			? item.seller_email
+			: null,
+	stock:
+		typeof item.stock === 'number' && Number.isFinite(item.stock) && item.stock > 0
+			? item.stock
+			: 0,
+	isActive: item.is_active ?? true,
 	promotion: mapApiPromotionSummary(item.applied_promotion)
 });
 
@@ -298,6 +324,12 @@ export const mapApiPromotion = (item: ApiPromotion): Promotion => ({
 export const mapApiOrderItem = (item: ApiOrderItem, apiBaseUrl: string): OrderItem => ({
 	id: item.ID,
 	productId: item.product_id ?? 0,
+	sellerId:
+		typeof item.seller_id === 'number' && Number.isFinite(item.seller_id) ? item.seller_id : null,
+	sellerEmail:
+		typeof item.seller_email === 'string' && item.seller_email.trim() !== ''
+			? item.seller_email
+			: null,
 	productName: item.product_name,
 	productDescription: item.product_description,
 	productImageUrl: buildProductImageUrl(item.product_image, apiBaseUrl),

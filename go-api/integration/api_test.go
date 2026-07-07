@@ -58,9 +58,9 @@ func openIntegrationTx(t *testing.T) *gorm.DB {
 
 	if err := db.AutoMigrate(
 		&models.Category{},
+		&models.User{},
 		&models.Product{},
 		&models.Promotion{},
-		&models.User{},
 		&models.Order{},
 		&models.OrderItem{},
 	); err != nil {

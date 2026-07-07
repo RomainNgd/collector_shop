@@ -3,6 +3,8 @@ package services
 import (
 	"math"
 	"poc-gin/models"
+
+	"gorm.io/gorm"
 )
 
 func roundCurrency(value float64) float64 {
@@ -65,21 +67,27 @@ func chooseBestPromotion(basePrice float64, promotions []models.Promotion) (floa
 	return bestPrice, applied
 }
 
-func applyProductPricing(product *models.Product, globalPromotions []models.Promotion) {
+func applyProductPricing(product *models.Product, _ []models.Promotion) {
 	product.EffectivePrice = roundCurrency(product.Price)
 	product.AppliedPromotion = nil
 
-	applicablePromotions := make([]models.Promotion, 0, len(product.Promotions)+len(globalPromotions))
-
-	for _, promotion := range product.Promotions {
-		if promotion.IsActive {
-			applicablePromotions = append(applicablePromotions, promotion)
-		}
+	if product.PromotionActive {
+		bestPrice, appliedPromotion := chooseBestPromotion(product.Price, []models.Promotion{
+			{
+				Model:        gormModel(product.ID),
+				Name:         "Promotion vendeur",
+				Type:         product.PromotionType,
+				Value:        product.PromotionValue,
+				IsActive:     product.PromotionActive,
+				AppliesToAll: false,
+			},
+		})
+		product.EffectivePrice = bestPrice
+		product.AppliedPromotion = appliedPromotion
+		return
 	}
+}
 
-	applicablePromotions = append(applicablePromotions, globalPromotions...)
-
-	bestPrice, appliedPromotion := chooseBestPromotion(product.Price, applicablePromotions)
-	product.EffectivePrice = bestPrice
-	product.AppliedPromotion = appliedPromotion
+func gormModel(id uint) gorm.Model {
+	return gorm.Model{ID: id}
 }

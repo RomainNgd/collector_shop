@@ -36,7 +36,12 @@ type ProductFormValues = {
 	name: string;
 	description: string;
 	price: string;
+	stock: string;
 	categoryId: string;
+	isActive: 'true' | 'false';
+	promotionActive: 'true' | 'false';
+	promotionType: string;
+	promotionValue: string;
 	currentImageName?: string;
 	removeImage?: 'true';
 };
@@ -137,7 +142,13 @@ const readProductForm = async (request: Request): Promise<ParsedProductForm> => 
 	const name = getFormString(formData, 'name').trim();
 	const description = getFormString(formData, 'description').trim();
 	const priceValue = getFormString(formData, 'price').trim();
+	const stockValue = getFormString(formData, 'stock', '1').trim();
 	const categoryId = getFormString(formData, 'category_id').trim();
+	const isActive = getFormString(formData, 'is_active', 'true') === 'true' ? 'true' : 'false';
+	const promotionActive =
+		getFormString(formData, 'promotion_active', 'false') === 'true' ? 'true' : 'false';
+	const promotionType = getFormString(formData, 'promotion_type').trim();
+	const promotionValue = getFormString(formData, 'promotion_value', '0').trim();
 	const currentImageName = getFormString(formData, 'currentImageName').trim();
 	const imageFile = getImageFile(formData.get('image'));
 	const removeImage = getFormString(formData, 'removeImage') === 'true';
@@ -149,7 +160,12 @@ const readProductForm = async (request: Request): Promise<ParsedProductForm> => 
 			name,
 			description,
 			price: priceValue,
+			stock: stockValue,
 			categoryId,
+			isActive,
+			promotionActive,
+			promotionType,
+			promotionValue,
 			currentImageName,
 			removeImage: removeImage ? 'true' : undefined
 		},
@@ -212,7 +228,7 @@ const validateProductForm = (
 	price: number,
 	imageFile: File | null
 ) => {
-	if (!values.name || !values.description || values.price === '') {
+	if (!values.name || !values.description || values.price === '' || values.stock === '') {
 		return failAdminAction(400, action, 'Tous les champs produit sont requis', {
 			productValues: values
 		});
@@ -230,6 +246,13 @@ const validateProductForm = (
 		});
 	}
 
+	const numericStock = Number(values.stock);
+	if (!Number.isInteger(numericStock) || numericStock <= 0) {
+		return failAdminAction(400, action, 'Le stock doit etre un entier positif', {
+			productValues: values
+		});
+	}
+
 	const numericCategoryId = Number(values.categoryId);
 	if (!Number.isInteger(numericCategoryId) || numericCategoryId <= 0) {
 		return failAdminAction(400, action, 'La categorie selectionnee est invalide', {
@@ -242,6 +265,28 @@ const validateProductForm = (
 		return failAdminAction(400, action, imageError, {
 			productValues: values
 		});
+	}
+
+	if (values.promotionActive === 'true') {
+		const promotionValue = Number(values.promotionValue);
+		if (
+			values.promotionType !== PROMOTION_TYPE_PERCENTAGE &&
+			values.promotionType !== PROMOTION_TYPE_FIXED
+		) {
+			return failAdminAction(400, action, 'Le type de promotion est invalide', {
+				productValues: values
+			});
+		}
+		if (!Number.isFinite(promotionValue) || promotionValue <= 0) {
+			return failAdminAction(400, action, 'La valeur de promotion doit etre positive', {
+				productValues: values
+			});
+		}
+		if (values.promotionType === PROMOTION_TYPE_PERCENTAGE && promotionValue > 100) {
+			return failAdminAction(400, action, 'Le pourcentage ne peut pas depasser 100', {
+				productValues: values
+			});
+		}
 	}
 
 	return null;
@@ -355,8 +400,12 @@ export const actions: Actions = {
 			body: JSON.stringify({
 				name: values.name,
 				price,
+				stock: Number(values.stock),
 				description: values.description,
-				category_id: Number(values.categoryId)
+				category_id: Number(values.categoryId),
+				promotion_active: values.promotionActive === 'true',
+				promotion_type: values.promotionActive === 'true' ? values.promotionType : '',
+				promotion_value: values.promotionActive === 'true' ? Number(values.promotionValue) : 0
 			})
 		});
 
@@ -418,9 +467,14 @@ export const actions: Actions = {
 			body: JSON.stringify({
 				name: values.name,
 				price,
+				stock: Number(values.stock),
+				is_active: values.isActive === 'true',
 				description: values.description,
 				image: removeImage && !imageFile ? '' : (values.currentImageName ?? ''),
-				category_id: Number(values.categoryId)
+				category_id: Number(values.categoryId),
+				promotion_active: values.promotionActive === 'true',
+				promotion_type: values.promotionActive === 'true' ? values.promotionType : '',
+				promotion_value: values.promotionActive === 'true' ? Number(values.promotionValue) : 0
 			})
 		});
 

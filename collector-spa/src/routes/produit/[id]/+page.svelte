@@ -58,6 +58,14 @@
 					<span class="detail-label">Reference</span>
 					<span class="detail-value">#{data.product.id}</span>
 				</div>
+				<div class="meta-item">
+					<span class="detail-label">Vendeur</span>
+					<span class="detail-value">{data.product.sellerEmail ?? 'Vendeur marketplace'}</span>
+				</div>
+				<div class="meta-item">
+					<span class="detail-label">Stock</span>
+					<span class="detail-value">{data.product.stock}</span>
+				</div>
 			</div>
 
 			<div class="mt-8">

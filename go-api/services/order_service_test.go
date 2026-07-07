@@ -30,31 +30,24 @@ func TestOrderServiceCreateOrderLocksPricing(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewOrderService(tx)
 	user := seedUser(t, tx, constants.RoleUser)
+	seller := seedUser(t, tx, constants.RoleUser)
 	category := seedCategory(t, tx)
 
 	product := &models.Product{
-		Name:        fmt.Sprintf("Console-%d", time.Now().UnixNano()),
-		Description: "Collector item",
-		Image:       "console.png",
-		Price:       100,
-		CategoryID:  category.ID,
+		Name:            fmt.Sprintf("Console-%d", time.Now().UnixNano()),
+		Description:     "Collector item",
+		Image:           "console.png",
+		Price:           100,
+		Stock:           3,
+		IsActive:        true,
+		SellerID:        &seller.ID,
+		CategoryID:      category.ID,
+		PromotionType:   models.PromotionTypePercentage,
+		PromotionValue:  10,
+		PromotionActive: true,
 	}
 	if err := tx.Create(product).Error; err != nil {
 		t.Fatalf("failed to create product: %v", err)
-	}
-
-	promotion := &models.Promotion{
-		Name:         "Launch",
-		Type:         models.PromotionTypePercentage,
-		Value:        10,
-		IsActive:     true,
-		AppliesToAll: false,
-	}
-	if err := tx.Create(promotion).Error; err != nil {
-		t.Fatalf("failed to create promotion: %v", err)
-	}
-	if err := tx.Model(promotion).Association("Products").Append(product); err != nil {
-		t.Fatalf("failed to link promotion: %v", err)
 	}
 
 	order, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
@@ -87,8 +80,19 @@ func TestOrderServiceCreateOrderLocksPricing(t *testing.T) {
 	if line.UnitBasePrice != 100 || line.UnitPrice != 90 || line.LineTotal != 180 {
 		t.Fatalf("unexpected line snapshot: %#v", line)
 	}
-	if line.PromotionID == nil || *line.PromotionID != promotion.ID {
+	if line.PromotionID == nil || *line.PromotionID != product.ID {
 		t.Fatalf("expected promotion snapshot, got %#v", line.PromotionID)
+	}
+	if line.SellerID != seller.ID || line.SellerEmail != seller.Email {
+		t.Fatalf("expected seller snapshot, got seller=%d email=%q", line.SellerID, line.SellerEmail)
+	}
+
+	var reloadedProduct models.Product
+	if err := tx.First(&reloadedProduct, product.ID).Error; err != nil {
+		t.Fatalf("failed to reload product: %v", err)
+	}
+	if reloadedProduct.Stock != 1 {
+		t.Fatalf("expected stock decremented to 1, got %d", reloadedProduct.Stock)
 	}
 }
 

@@ -11,19 +11,28 @@ type LoginRequest struct {
 }
 
 type CreateProductRequest struct {
-	Name        string  `json:"name" binding:"required,min=2,max=120"`
-	Description string  `json:"description" binding:"required,min=2,max=1000"`
-	Image       string  `json:"image" binding:"omitempty,max=255"`
-	Price       float64 `json:"price" binding:"required,gt=0"`
-	CategoryID  uint    `json:"category_id" binding:"required,gt=0"`
+	Name            string  `json:"name" binding:"required,min=2,max=120"`
+	Description     string  `json:"description" binding:"required,min=2,max=1000"`
+	Image           string  `json:"image" binding:"omitempty,max=255"`
+	Price           float64 `json:"price" binding:"required,gt=0"`
+	Stock           int     `json:"stock" binding:"required,gt=0"`
+	CategoryID      uint    `json:"category_id" binding:"required,gt=0"`
+	PromotionType   string  `json:"promotion_type" binding:"omitempty,oneof=percentage fixed"`
+	PromotionValue  float64 `json:"promotion_value" binding:"omitempty,gte=0"`
+	PromotionActive *bool   `json:"promotion_active"`
 }
 
 type UpdateProductRequest struct {
-	Name        string  `json:"name" binding:"required,min=2,max=120"`
-	Description string  `json:"description" binding:"required,min=2,max=1000"`
-	Image       string  `json:"image" binding:"omitempty,max=255"`
-	Price       float64 `json:"price" binding:"required,gt=0"`
-	CategoryID  uint    `json:"category_id" binding:"required,gt=0"`
+	Name            string  `json:"name" binding:"required,min=2,max=120"`
+	Description     string  `json:"description" binding:"required,min=2,max=1000"`
+	Image           string  `json:"image" binding:"omitempty,max=255"`
+	Price           float64 `json:"price" binding:"required,gt=0"`
+	Stock           int     `json:"stock" binding:"required,gt=0"`
+	IsActive        *bool   `json:"is_active" binding:"required"`
+	CategoryID      uint    `json:"category_id" binding:"required,gt=0"`
+	PromotionType   string  `json:"promotion_type" binding:"omitempty,oneof=percentage fixed"`
+	PromotionValue  float64 `json:"promotion_value" binding:"omitempty,gte=0"`
+	PromotionActive *bool   `json:"promotion_active" binding:"required"`
 }
 
 type CreateCategoryRequest struct {

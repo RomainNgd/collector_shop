@@ -23,6 +23,10 @@ const product = (id: number, price = 10): Product => ({
 	imageName: 'image.png',
 	categoryId: 1,
 	category: 'Category',
+	sellerId: 7,
+	sellerEmail: 'seller@test.local',
+	stock: 4,
+	isActive: true,
 	promotion: null
 });
 

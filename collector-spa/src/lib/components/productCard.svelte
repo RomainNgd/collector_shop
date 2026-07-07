@@ -49,6 +49,9 @@
 		<div class="mt-5">
 			<h3 class="theme-title line-clamp-1 text-xl leading-tight font-black">{product.name}</h3>
 			<p class="theme-copy mt-3 line-clamp-2 text-sm">{product.description}</p>
+			<p class="theme-copy mt-2 text-xs">
+				{product.sellerEmail ?? 'Marketplace'} · Stock: {product.stock}
+			</p>
 
 			<div class="mt-5 flex items-end justify-between gap-4">
 				<ProductPrice {product} />

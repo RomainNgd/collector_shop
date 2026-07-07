@@ -32,6 +32,7 @@ func TestRouteRegistration(t *testing.T) {
 		"POST /categories",
 		"GET /products",
 		"POST /products",
+		"GET /seller/products",
 		"POST /products/:id/image",
 		"GET /promotions",
 		"PUT /promotions/:id",
