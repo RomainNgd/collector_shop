@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { cartAddPulse, cartCount } from '$lib/stores/cart';
 	import { ADMIN_ROLE } from '$lib/types';
 	import { onDestroy } from 'svelte';
@@ -11,6 +12,14 @@
 
 	let pulseActive = $state(false);
 	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+	function isActive(path: string): boolean {
+		const current = page.url.pathname;
+		if (path === '/') {
+			return current === '/';
+		}
+		return current === path || current.startsWith(`${path}/`);
+	}
 
 	$effect(() => {
 		if ($cartAddPulse === 0) {
@@ -48,17 +57,33 @@
 				</a>
 
 				<nav class="hidden items-center gap-3 md:flex">
-					<a href={resolve('/')} class="nav-link">Accueil</a>
-					<a href={resolve('/catalogue')} class="nav-link">Catalogue</a>
+					<a href={resolve('/')} class="nav-link" class:active={isActive('/')}>Accueil</a>
+					<a href={resolve('/catalogue')} class="nav-link" class:active={isActive('/catalogue')}
+						>Catalogue</a
+					>
 					{#if data.user}
 						{#if data.user.role !== ADMIN_ROLE}
-							<a href={resolve('/vendre')} class="nav-link">Vendre</a>
-							<a href={resolve('/mes-produits')} class="nav-link">Mes produits</a>
+							<a href={resolve('/vendre')} class="nav-link" class:active={isActive('/vendre')}
+								>Vendre</a
+							>
+							<a
+								href={resolve('/mes-produits')}
+								class="nav-link"
+								class:active={isActive('/mes-produits')}>Mes produits</a
+							>
 						{/if}
-						<a href={resolve('/mes-commandes')} class="nav-link">Mes commandes</a>
+						<a
+							href={resolve('/mes-commandes')}
+							class="nav-link"
+							class:active={isActive('/mes-commandes')}>Mes commandes</a
+						>
 					{/if}
 					{#if data.user?.role === ADMIN_ROLE}
-						<a href={resolve('/administration')} class="nav-link">Administration</a>
+						<a
+							href={resolve('/administration')}
+							class="nav-link"
+							class:active={isActive('/administration')}>Administration</a
+						>
 					{/if}
 				</nav>
 			</div>
@@ -179,6 +204,11 @@
 	.nav-link:hover {
 		background: rgb(var(--color-secondary-rgb) / 0.12);
 		color: var(--color-black);
+	}
+
+	.nav-link.active {
+		background: var(--gradient-primary);
+		color: var(--color-white);
 	}
 
 	.header-action {
