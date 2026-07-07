@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"poc-gin/models"
+	"poc-gin/pkg/constants"
 	"poc-gin/services"
 
 	"github.com/gin-gonic/gin"
@@ -38,11 +39,12 @@ func (m *mockAuthService) Login(_ context.Context, email, password string) (stri
 }
 
 type mockProductService struct {
-	getAllFn  func() ([]*models.Product, error)
-	getByIDFn func(id uint) (*models.Product, error)
-	createFn  func(product *models.Product) error
-	updateFn  func(id uint, updates map[string]interface{}) (*models.Product, error)
-	deleteFn  func(id uint) error
+	getAllFn       func() ([]*models.Product, error)
+	getForSellerFn func(sellerID uint) ([]*models.Product, error)
+	getByIDFn      func(id uint) (*models.Product, error)
+	createFn       func(product *models.Product) error
+	updateFn       func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error)
+	deleteFn       func(actorID uint, actorRole string, id uint) error
 }
 
 func (m *mockProductService) GetAllProducts(_ context.Context) ([]*models.Product, error) {
@@ -50,6 +52,13 @@ func (m *mockProductService) GetAllProducts(_ context.Context) ([]*models.Produc
 		return m.getAllFn()
 	}
 	return nil, errors.New("unexpected GetAllProducts call")
+}
+
+func (m *mockProductService) GetProductsForSeller(_ context.Context, sellerID uint) ([]*models.Product, error) {
+	if m.getForSellerFn != nil {
+		return m.getForSellerFn(sellerID)
+	}
+	return nil, errors.New("unexpected GetProductsForSeller call")
 }
 
 func (m *mockProductService) GetProductByID(_ context.Context, id uint) (*models.Product, error) {
@@ -66,16 +75,16 @@ func (m *mockProductService) CreateProduct(_ context.Context, product *models.Pr
 	return errors.New("unexpected CreateProduct call")
 }
 
-func (m *mockProductService) UpdateProduct(_ context.Context, id uint, updates map[string]interface{}) (*models.Product, error) {
+func (m *mockProductService) UpdateProduct(_ context.Context, actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 	if m.updateFn != nil {
-		return m.updateFn(id, updates)
+		return m.updateFn(actorID, actorRole, id, updates)
 	}
 	return nil, errors.New("unexpected UpdateProduct call")
 }
 
-func (m *mockProductService) DeleteProduct(_ context.Context, id uint) error {
+func (m *mockProductService) DeleteProduct(_ context.Context, actorID uint, actorRole string, id uint) error {
 	if m.deleteFn != nil {
-		return m.deleteFn(id)
+		return m.deleteFn(actorID, actorRole, id)
 	}
 	return errors.New("unexpected DeleteProduct call")
 }
@@ -264,6 +273,28 @@ func performJSONRequest(handlerFunc gin.HandlerFunc, method, target string, body
 	ctx.Request = req
 	ctx.Params = params
 
+	handlerFunc(ctx)
+	return recorder
+}
+
+func performAuthenticatedJSONRequest(handlerFunc gin.HandlerFunc, method, target string, body any, params ...gin.Param) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+
+	var reader *bytes.Reader
+	if body == nil {
+		reader = bytes.NewReader(nil)
+	} else {
+		payload, _ := json.Marshal(body)
+		reader = bytes.NewReader(payload)
+	}
+
+	req, _ := http.NewRequest(method, target, reader)
+	req.Header.Set("Content-Type", "application/json")
+	ctx.Request = req
+	ctx.Params = params
+	ctx.Set(constants.ContextKeyUserID, uint(1))
+	ctx.Set(constants.ContextKeyUserRole, constants.RoleUser)
 	handlerFunc(ctx)
 	return recorder
 }

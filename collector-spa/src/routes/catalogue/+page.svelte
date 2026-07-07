@@ -160,6 +160,9 @@
 											<p class="theme-copy mt-2 line-clamp-2 text-sm">
 												{product.description}
 											</p>
+											<p class="theme-copy mt-2 text-xs">
+												Vendeur: {product.sellerEmail ?? 'Marketplace'} · Stock: {product.stock}
+											</p>
 										</div>
 									</div>
 								</td>

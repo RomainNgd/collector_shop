@@ -92,7 +92,8 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		switch {
 		case errors.Is(err, services.ErrOrderEmpty),
 			errors.Is(err, services.ErrOrderInvalidQuantity),
-			errors.Is(err, services.ErrOrderProductNotFound):
+			errors.Is(err, services.ErrOrderProductNotFound),
+			errors.Is(err, services.ErrOrderInsufficientStock):
 			RespondError(c, http.StatusBadRequest, "ORDER_INVALID", "Invalid order payload", err.Error())
 			return
 		default:

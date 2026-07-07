@@ -24,10 +24,11 @@ func TestChooseBestPromotion(t *testing.T) {
 
 func TestApplyProductPricingFloorsAtZero(t *testing.T) {
 	product := &models.Product{
-		Price: 12,
-		Promotions: []models.Promotion{
-			{Model: gorm.Model{ID: 3}, Name: "Too large", Type: models.PromotionTypeFixed, Value: 20, IsActive: true},
-		},
+		Model:           gorm.Model{ID: 3},
+		Price:           12,
+		PromotionType:   models.PromotionTypeFixed,
+		PromotionValue:  20,
+		PromotionActive: true,
 	}
 
 	applyProductPricing(product, nil)

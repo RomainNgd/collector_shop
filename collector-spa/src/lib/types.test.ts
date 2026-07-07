@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	ORDER_STATUS_AWAITING_PAYMENT,
+	ORDER_STATUS_CANCELLED,
+	ORDER_STATUS_DELIVERED,
+	ORDER_STATUS_PREPARATION,
+	ORDER_STATUS_SHIPPING,
 	PROMOTION_TYPE_FIXED,
 	PROMOTION_TYPE_PERCENTAGE,
 	mapApiOrder,
@@ -252,5 +256,136 @@ describe('API mapping helpers', () => {
 			stripeCheckoutExpiresAt: null,
 			items: [{ productId: 0, categoryName: 'non-classe', promotionId: null }]
 		});
+	});
+
+	it('normalizes every known order status and falls back on item count', () => {
+		const baseOrder = {
+			ID: 6,
+			subtotal: 10,
+			discount_total: 0,
+			total: 10
+		};
+
+		expect(
+			mapApiOrder({ ...baseOrder, status: ORDER_STATUS_PREPARATION }, 'https://api.local')
+		).toMatchObject({ status: ORDER_STATUS_PREPARATION });
+		expect(
+			mapApiOrder({ ...baseOrder, status: ORDER_STATUS_SHIPPING }, 'https://api.local')
+		).toMatchObject({ status: ORDER_STATUS_SHIPPING });
+		expect(
+			mapApiOrder({ ...baseOrder, status: ORDER_STATUS_DELIVERED }, 'https://api.local')
+		).toMatchObject({ status: ORDER_STATUS_DELIVERED });
+		expect(
+			mapApiOrder({ ...baseOrder, status: ORDER_STATUS_CANCELLED }, 'https://api.local')
+		).toMatchObject({ status: ORDER_STATUS_CANCELLED });
+
+		expect(mapApiOrder({ ...baseOrder, status: 'unknown' }, 'https://api.local')).toMatchObject({
+			itemCount: 0
+		});
+
+		expect(
+			mapApiOrder(
+				{
+					...baseOrder,
+					status: 'unknown',
+					items: [
+						{
+							ID: 1,
+							product_name: 'Binder',
+							product_description: 'Binder',
+							product_image: '',
+							quantity: 3,
+							unit_base_price: 1,
+							unit_price: 1,
+							unit_discount: 0,
+							line_base_total: 3,
+							line_discount_total: 0,
+							line_total: 3
+						},
+						{
+							ID: 2,
+							product_name: 'Sleeve',
+							product_description: 'Sleeve',
+							product_image: '',
+							quantity: 2,
+							unit_base_price: 1,
+							unit_price: 1,
+							unit_discount: 0,
+							line_base_total: 2,
+							line_discount_total: 0,
+							line_total: 2
+						}
+					]
+				},
+				'https://api.local'
+			)
+		).toMatchObject({ itemCount: 5 });
+	});
+
+	it('handles missing optional API fields on products, promotions and orders', () => {
+		const productWithSellerInfo = mapApiProduct(
+			{
+				ID: 8,
+				name: 'Deck',
+				description: 'Starter deck',
+				price: 20,
+				image: '',
+				category_id: 1,
+				seller_id: 9,
+				seller_email: 'seller@example.com',
+				stock: 3,
+				applied_promotion: { name: 'None', type: 'fixed', value: 1 }
+			},
+			'https://api.local'
+		);
+		expect(productWithSellerInfo).toMatchObject({
+			sellerId: 9,
+			sellerEmail: 'seller@example.com',
+			stock: 3,
+			promotion: null
+		});
+
+		const productWithoutSellerInfo = mapApiProduct(
+			{
+				ID: 9,
+				name: 'Deck',
+				description: 'Starter deck',
+				price: 20,
+				image: '',
+				category_id: 1
+			},
+			'https://api.local'
+		);
+		expect(productWithoutSellerInfo).toMatchObject({
+			sellerId: null,
+			sellerEmail: null,
+			stock: 0
+		});
+
+		expect(
+			mapApiPromotion({ ID: 10, name: 'No extras', type: PROMOTION_TYPE_FIXED, value: 3 })
+		).toMatchObject({ appliesToAll: false, productIds: [], productCount: 0 });
+
+		expect(
+			mapApiPromotion({
+				ID: 11,
+				name: 'With ids',
+				type: PROMOTION_TYPE_FIXED,
+				value: 3,
+				product_ids: [1, 2, 3]
+			})
+		).toMatchObject({ productIds: [1, 2, 3], productCount: 3 });
+
+		const orderWithoutPaidAt = mapApiOrder(
+			{
+				ID: 20,
+				status: ORDER_STATUS_AWAITING_PAYMENT,
+				subtotal: 5,
+				discount_total: 0,
+				total: 5
+			},
+			'https://api.local'
+		);
+		expect(orderWithoutPaidAt.paidAt).toBeNull();
 	});
 });

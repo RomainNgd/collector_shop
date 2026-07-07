@@ -14,13 +14,19 @@ func SetupProductRoutes(r *gin.Engine, productHandler *controllers.ProductHandle
 		products.GET("/:id", productHandler.FindOneProduct)
 	}
 
-	adminProducts := r.Group("/products")
-	adminProducts.Use(authMW.Authenticate(), authMW.RequireAdmin())
+	sellerProducts := r.Group("/seller/products")
+	sellerProducts.Use(authMW.Authenticate())
 	{
-		adminProducts.POST("", productHandler.CreateProduct)
-		adminProducts.PUT("/:id", productHandler.UpdateProduct)
-		adminProducts.DELETE("/:id", productHandler.DeleteProduct)
-		adminProducts.POST("/:id/image", productHandler.UploadProductImage)
-		adminProducts.DELETE("/:id/image", productHandler.DeleteProductImage)
+		sellerProducts.GET("", productHandler.FindSellerProducts)
+	}
+
+	authProducts := r.Group("/products")
+	authProducts.Use(authMW.Authenticate())
+	{
+		authProducts.POST("", productHandler.CreateProduct)
+		authProducts.PUT("/:id", productHandler.UpdateProduct)
+		authProducts.DELETE("/:id", productHandler.DeleteProduct)
+		authProducts.POST("/:id/image", productHandler.UploadProductImage)
+		authProducts.DELETE("/:id/image", productHandler.DeleteProductImage)
 	}
 }

@@ -7,6 +7,10 @@ const STORAGE_KEY = 'collector-shop-cart-v1';
 const normalizeProduct = (product: Product): Product => ({
 	...product,
 	basePrice: typeof product.basePrice === 'number' ? product.basePrice : product.price,
+	sellerId: product.sellerId ?? null,
+	sellerEmail: product.sellerEmail ?? null,
+	stock: typeof product.stock === 'number' ? product.stock : 0,
+	isActive: product.isActive ?? true,
 	promotion: product.promotion ?? null
 });
 

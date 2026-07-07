@@ -58,9 +58,9 @@ func openIntegrationTx(t *testing.T) *gorm.DB {
 
 	if err := db.AutoMigrate(
 		&models.Category{},
+		&models.User{},
 		&models.Product{},
 		&models.Promotion{},
-		&models.User{},
 		&models.Order{},
 		&models.OrderItem{},
 	); err != nil {
@@ -293,6 +293,7 @@ func TestProductRoutesIntegration(t *testing.T) {
 		"image":       "blue-eyes.png",
 		"price":       19.99,
 		"category_id": category.ID,
+		"stock":       1,
 	}, adminToken)
 	if createResp.Code != http.StatusCreated {
 		t.Fatalf("expected 201 for product create, got %d body=%s", createResp.Code, createResp.Body.String())
@@ -403,6 +404,7 @@ func TestOrderRoutesIntegration(t *testing.T) {
 		Description: "Checkout product",
 		Image:       "order.png",
 		Price:       25,
+		Stock:       5,
 		CategoryID:  category.ID,
 	}
 	if err := tx.Create(product).Error; err != nil {

@@ -8,6 +8,7 @@ import (
 	"poc-gin/pkg/constants"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const orderCurrencyEUR = "EUR"
@@ -19,6 +20,7 @@ var (
 	ErrOrderInvalidStatus              = errors.New("order status is invalid")
 	ErrOrderStatusTransitionNotAllowed = errors.New("order status transition is not allowed")
 	ErrOrderDeletionNotAllowed         = errors.New("order deletion is not allowed")
+	ErrOrderInsufficientStock          = errors.New("order product stock is insufficient")
 )
 
 type OrderItemInput struct {
@@ -70,12 +72,27 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID uint, items []Ord
 			if !ok {
 				return ErrOrderProductNotFound
 			}
+			if product.Stock < item.Quantity {
+				return ErrOrderInsufficientStock
+			}
 
 			addOrderItem(&order, createOrderItem(product, item))
 		}
 
 		if err := tx.Create(&order).Error; err != nil {
 			return fmt.Errorf("failed to create order: %w", err)
+		}
+
+		for _, item := range normalizedItems {
+			result := tx.Model(&models.Product{}).
+				Where("id = ? AND stock >= ?", item.ProductID, item.Quantity).
+				UpdateColumn("stock", gorm.Expr("stock - ?", item.Quantity))
+			if result.Error != nil {
+				return fmt.Errorf("failed to decrement product stock: %w", result.Error)
+			}
+			if result.RowsAffected == 0 {
+				return ErrOrderInsufficientStock
+			}
 		}
 
 		reloadedOrder, err := preloadOrder(tx.WithContext(ctx), order.ID)
@@ -100,7 +117,12 @@ func loadPricedOrderProducts(ctx context.Context, tx *gorm.DB, items []OrderItem
 	}
 
 	var products []models.Product
-	if err := tx.Preload("Category").Preload("Promotions").Where("id IN ?", productIDs).Find(&products).Error; err != nil {
+	if err := tx.
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Preload("Category").
+		Preload("Seller").
+		Where("id IN ? AND is_active = ?", productIDs, true).
+		Find(&products).Error; err != nil {
 		return nil, fmt.Errorf("failed to fetch order products: %w", err)
 	}
 	if len(products) != len(productIDs) {
@@ -131,6 +153,8 @@ func createOrderItem(product *models.Product, input OrderItemInput) models.Order
 
 	item := models.OrderItem{
 		ProductID:          product.ID,
+		SellerID:           productSellerID(product),
+		SellerEmail:        product.Seller.Email,
 		ProductName:        product.Name,
 		ProductDescription: product.Description,
 		ProductImage:       product.Image,
@@ -153,6 +177,13 @@ func createOrderItem(product *models.Product, input OrderItemInput) models.Order
 	}
 
 	return item
+}
+
+func productSellerID(product *models.Product) uint {
+	if product.SellerID == nil {
+		return 0
+	}
+	return *product.SellerID
 }
 
 func addOrderItem(order *models.Order, item models.OrderItem) {

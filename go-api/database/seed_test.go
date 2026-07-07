@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"poc-gin/models"
 	"poc-gin/pkg/constants"
@@ -253,6 +254,135 @@ func TestSeedDemoData(t *testing.T) {
 	}
 }
 
+func TestSeedReportSummary(t *testing.T) {
+	report := &SeedReport{
+		CategoriesCreated: 1,
+		CategoriesUpdated: 2,
+		ProductsCreated:   3,
+		ProductsUpdated:   4,
+		PromotionsCreated: 5,
+		PromotionsUpdated: 6,
+		UsersCreated:      7,
+		UsersUpdated:      8,
+		ImagesWritten:     9,
+	}
+
+	summary := report.Summary()
+	if !strings.Contains(summary, "categories created=1 updated=2") ||
+		!strings.Contains(summary, "products created=3 updated=4") ||
+		!strings.Contains(summary, "promotions created=5 updated=6") ||
+		!strings.Contains(summary, "users created=7 updated=8") ||
+		!strings.Contains(summary, "images synced=9") {
+		t.Fatalf("unexpected summary: %q", summary)
+	}
+}
+
+func TestDefaultSeedSellerIDReturnsErrorWhenNoUserExists(t *testing.T) {
+	db := openSeedTestDB(t)
+	tx := db.Begin()
+	if tx.Error != nil {
+		t.Fatalf("failed to begin transaction: %v", tx.Error)
+	}
+	t.Cleanup(func() {
+		_ = tx.Rollback().Error
+		sqlDB, err := db.DB()
+		if err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+
+	if err := tx.Where("role = ?", constants.RoleUser).Delete(&models.User{}).Error; err != nil {
+		t.Fatalf("failed to clear users: %v", err)
+	}
+
+	if _, err := defaultSeedSellerID(tx); err == nil {
+		t.Fatal("expected error when no seller user exists")
+	}
+}
+
+func TestUpsertProductBackfillsMissingSellerFields(t *testing.T) {
+	db := openSeedTestDB(t)
+	tx := db.Begin()
+	if tx.Error != nil {
+		t.Fatalf("failed to begin transaction: %v", tx.Error)
+	}
+	t.Cleanup(func() {
+		_ = tx.Rollback().Error
+		sqlDB, err := db.DB()
+		if err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+
+	category := &models.Category{Name: fmt.Sprintf("Category-%d", time.Now().UnixNano()), Description: "Test"}
+	if err := tx.Create(category).Error; err != nil {
+		t.Fatalf("failed to create category: %v", err)
+	}
+	seller := &models.User{Email: fmt.Sprintf("seller-%d@example.com", time.Now().UnixNano()), Password: "hash", Role: constants.RoleUser}
+	if err := tx.Create(seller).Error; err != nil {
+		t.Fatalf("failed to create seller: %v", err)
+	}
+
+	fixture := demoProductFixture{
+		Name:        fmt.Sprintf("Legacy-Product-%d", time.Now().UnixNano()),
+		Description: "Legacy description",
+		Image:       "legacy.png",
+		Price:       9.99,
+		Category:    "unused",
+	}
+
+	// Simulate a pre-existing product created before seller/stock/is_active
+	// were introduced: zero stock, inactive, and no seller assigned.
+	existing := models.Product{
+		Name:        fixture.Name,
+		Description: fixture.Description,
+		Image:       fixture.Image,
+		Price:       fixture.Price,
+		Stock:       0,
+		CategoryID:  category.ID,
+	}
+	if err := tx.Create(&existing).Error; err != nil {
+		t.Fatalf("failed to seed legacy product: %v", err)
+	}
+	if err := tx.Model(&existing).Updates(map[string]interface{}{"stock": 0, "is_active": false}).Error; err != nil {
+		t.Fatalf("failed to force legacy product state: %v", err)
+	}
+
+	created, updated, err := upsertProduct(tx, fixture, category.ID, seller.ID)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if created {
+		t.Fatal("expected existing product to be updated, not created")
+	}
+	if !updated {
+		t.Fatal("expected existing product to require an update")
+	}
+
+	var reloaded models.Product
+	if err := tx.First(&reloaded, existing.ID).Error; err != nil {
+		t.Fatalf("failed to reload product: %v", err)
+	}
+	if reloaded.Stock != 10 {
+		t.Fatalf("expected stock backfilled to 10, got %d", reloaded.Stock)
+	}
+	if !reloaded.IsActive {
+		t.Fatal("expected product to be reactivated")
+	}
+	if reloaded.SellerID == nil || *reloaded.SellerID != seller.ID {
+		t.Fatalf("expected seller backfilled to %d, got %#v", seller.ID, reloaded.SellerID)
+	}
+
+	// A second upsert with already-healthy fields should be a no-op.
+	created2, updated2, err := upsertProduct(tx, fixture, category.ID, seller.ID)
+	if err != nil {
+		t.Fatalf("expected success on second upsert, got %v", err)
+	}
+	if created2 || updated2 {
+		t.Fatalf("expected idempotent no-op, got created=%v updated=%v", created2, updated2)
+	}
+}
+
 func openSeedTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
@@ -275,9 +405,9 @@ func openSeedTestDB(t *testing.T) *gorm.DB {
 
 	if err := db.AutoMigrate(
 		&models.Category{},
+		&models.User{},
 		&models.Product{},
 		&models.Promotion{},
-		&models.User{},
 		&models.Order{},
 		&models.OrderItem{},
 	); err != nil {
