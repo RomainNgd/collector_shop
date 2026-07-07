@@ -36,7 +36,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: go-api
-          image: romain2311/go-api:latest
+          image: romain2311/go-api:ad3c51a
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
