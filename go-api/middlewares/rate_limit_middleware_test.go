@@ -64,8 +64,10 @@ func TestRateLimiterRefillsOverTime(t *testing.T) {
 	limiter := NewRateLimiter(2, time.Minute)
 	now := time.Now()
 
-	if !limiter.allow("client", now) {
-		t.Fatal("expected initial burst to be allowed")
+	for i := 0; i < 2; i++ {
+		if !limiter.allow("client", now) {
+			t.Fatalf("expected request %d in the initial burst to be allowed", i+1)
+		}
 	}
 	if limiter.allow("client", now) {
 		t.Fatal("expected empty bucket to deny")
