@@ -579,3 +579,71 @@ func TestCategoryDeletionRestrictedWhenProductReferencesIt(t *testing.T) {
 		t.Fatalf("expected ErrCategoryInUse, got %v", err)
 	}
 }
+
+func TestProductServiceGetProductForManagement(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+	service := NewProductService(tx)
+
+	t.Run("owner can manage their own product", func(t *testing.T) {
+		product := seedProduct(t, tx, category.ID)
+
+		found, err := service.GetProductForManagement(context.Background(), *product.SellerID, constants.RoleUser, product.ID)
+		if err != nil {
+			t.Fatalf("expected success for owner, got %v", err)
+		}
+		if found.ID != product.ID {
+			t.Fatalf("expected product %d, got %d", product.ID, found.ID)
+		}
+		if found.Category.ID != category.ID {
+			t.Fatalf("expected preloaded category, got %#v", found.Category)
+		}
+	})
+
+	t.Run("admin can manage any product", func(t *testing.T) {
+		product := seedProduct(t, tx, category.ID)
+		admin := seedUser(t, tx, constants.RoleAdmin)
+
+		found, err := service.GetProductForManagement(context.Background(), admin.ID, constants.RoleAdmin, product.ID)
+		if err != nil {
+			t.Fatalf("expected success for admin, got %v", err)
+		}
+		if found.ID != product.ID {
+			t.Fatalf("expected product %d, got %d", product.ID, found.ID)
+		}
+	})
+
+	t.Run("non-owner is denied", func(t *testing.T) {
+		product := seedProduct(t, tx, category.ID)
+		other := seedUser(t, tx, constants.RoleUser)
+
+		_, err := service.GetProductForManagement(context.Background(), other.ID, constants.RoleUser, product.ID)
+		if !errors.Is(err, ErrProductAccessDenied) {
+			t.Fatalf("expected ErrProductAccessDenied, got %v", err)
+		}
+	})
+
+	t.Run("owner can manage an inactive out-of-stock product", func(t *testing.T) {
+		product := seedProduct(t, tx, category.ID)
+		if err := tx.Model(product).Updates(map[string]interface{}{"is_active": false, "stock": 0}).Error; err != nil {
+			t.Fatalf("failed to deactivate product: %v", err)
+		}
+
+		found, err := service.GetProductForManagement(context.Background(), *product.SellerID, constants.RoleUser, product.ID)
+		if err != nil {
+			t.Fatalf("expected management access to bypass catalog filters, got %v", err)
+		}
+		if found.IsActive {
+			t.Fatal("expected fetched product to reflect inactive state")
+		}
+	})
+
+	t.Run("returns not found for unknown product", func(t *testing.T) {
+		user := seedUser(t, tx, constants.RoleUser)
+
+		_, err := service.GetProductForManagement(context.Background(), user.ID, constants.RoleUser, 9999999)
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatalf("expected ErrRecordNotFound, got %v", err)
+		}
+	})
+}

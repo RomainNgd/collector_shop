@@ -1,12 +1,65 @@
 package database
 
 import (
+	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
 	"poc-gin/config"
 )
+
+func testDatabaseConfig() *config.DatabaseConfig {
+	env := func(key, fallback string) string {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+		return fallback
+	}
+
+	return &config.DatabaseConfig{
+		Host:     env("DB_HOST", "127.0.0.1"),
+		Port:     env("DB_PORT", "5432"),
+		User:     env("DB_USER", "golang"),
+		Password: env("DB_PASSWORD", "golang"),
+		Name:     env("DB_NAME", "ecommerce"),
+	}
+}
+
+func TestNewConnectsPingsAndCloses(t *testing.T) {
+	cfg := testDatabaseConfig()
+
+	db, err := New(cfg)
+	if err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("postgres is required in CI: %v", err)
+		}
+		t.Skipf("postgres not available: %v", err)
+	}
+
+	if err := db.Ping(context.Background()); err != nil {
+		t.Fatalf("expected ping success, got %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("expected close success, got %v", err)
+	}
+}
+
+func TestNewReturnsFormattedErrorOnConnectionFailure(t *testing.T) {
+	cfg := testDatabaseConfig()
+	cfg.Port = "1"
+
+	_, err := New(cfg)
+	if err == nil {
+		t.Fatal("expected connection failure on unreachable port")
+	}
+	if !strings.Contains(err.Error(), "failed to ping database") &&
+		!strings.Contains(err.Error(), "failed to connect to database") {
+		t.Fatalf("expected formatted connection error, got %v", err)
+	}
+}
 
 func TestConnectionHint(t *testing.T) {
 	cfg := &config.DatabaseConfig{
