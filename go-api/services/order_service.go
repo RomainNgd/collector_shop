@@ -31,7 +31,7 @@ type OrderItemInput struct {
 
 type OrderServiceInterface interface {
 	CreateOrder(ctx context.Context, userID uint, items []OrderItemInput) (*models.Order, error)
-	GetOrdersForUser(ctx context.Context, userID uint) ([]*models.Order, error)
+	GetOrdersForUser(ctx context.Context, userID uint, page Pagination) ([]*models.Order, int64, error)
 	GetOrderByID(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error)
 	UpdateOrderStatus(ctx context.Context, actorID, orderID uint, actorRole, status string) (*models.Order, error)
 	DeleteOrder(ctx context.Context, actorID, orderID uint, actorRole string) error
@@ -198,23 +198,34 @@ func addOrderItem(order *models.Order, item models.OrderItem) {
 	order.DiscountTotal = roundCurrency(order.DiscountTotal + item.LineDiscountTotal)
 }
 
-func (s *OrderService) GetOrdersForUser(ctx context.Context, userID uint) ([]*models.Order, error) {
+func (s *OrderService) GetOrdersForUser(ctx context.Context, userID uint, page Pagination) ([]*models.Order, int64, error) {
 	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
+
+	limit, offset := page.normalized()
+
+	var total int64
+	if err := s.db.WithContext(ctx).Model(&models.Order{}).
+		Where("user_id = ?", userID).
+		Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count orders: %w", err)
+	}
 
 	var orders []*models.Order
 	query := s.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
 		Preload("Items", func(db *gorm.DB) *gorm.DB {
 			return db.Order("id ASC")
 		})
 
 	if err := query.Find(&orders).Error; err != nil {
-		return nil, fmt.Errorf("failed to fetch orders: %w", err)
+		return nil, 0, fmt.Errorf("failed to fetch orders: %w", err)
 	}
 
-	return orders, nil
+	return orders, total, nil
 }
 
 func (s *OrderService) GetOrderByID(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error) {
@@ -232,50 +243,106 @@ func (s *OrderService) UpdateOrderStatus(ctx context.Context, actorID, orderID u
 		return nil, ErrOrderInvalidStatus
 	}
 
-	order, err := s.findAccessibleOrder(ctx, actorID, orderID, actorRole)
+	var updatedOrder models.Order
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		order, err := findAccessibleOrderForUpdate(tx, actorID, orderID, actorRole)
+		if err != nil {
+			return err
+		}
+
+		if !canUpdateOrderStatus(actorRole, order.Status, status) {
+			return ErrOrderStatusTransitionNotAllowed
+		}
+
+		if order.Status != status {
+			// Cancellation is terminal: items go back on sale exactly once.
+			if status == models.OrderStatusCancelled {
+				if err := restockOrderItems(tx, order.Items); err != nil {
+					return err
+				}
+			}
+			if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Update("status", status).Error; err != nil {
+				return fmt.Errorf("failed to update order status: %w", err)
+			}
+		}
+
+		reloadedOrder, err := preloadOrder(tx, order.ID)
+		if err != nil {
+			return err
+		}
+
+		updatedOrder = *reloadedOrder
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if !canUpdateOrderStatus(actorRole, order.Status, status) {
-		return nil, ErrOrderStatusTransitionNotAllowed
-	}
-
-	if order.Status != status {
-		if err := s.db.WithContext(ctx).Model(order).Update("status", status).Error; err != nil {
-			return nil, fmt.Errorf("failed to update order status: %w", err)
-		}
-	}
-
-	return s.findAccessibleOrder(ctx, actorID, orderID, actorRole)
+	return &updatedOrder, nil
 }
 
 func (s *OrderService) DeleteOrder(ctx context.Context, actorID, orderID uint, actorRole string) error {
 	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
-	order, err := s.findAccessibleOrder(ctx, actorID, orderID, actorRole)
-	if err != nil {
-		return err
-	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		order, err := findAccessibleOrderForUpdate(tx, actorID, orderID, actorRole)
+		if err != nil {
+			return err
+		}
 
-	if actorRole != constants.RoleAdmin && order.Status != models.OrderStatusAwaitingPayment {
-		return ErrOrderDeletionNotAllowed
-	}
+		if actorRole != constants.RoleAdmin && order.Status != models.OrderStatusAwaitingPayment {
+			return ErrOrderDeletionNotAllowed
+		}
 
-	if err := s.db.WithContext(ctx).Where("order_id = ?", order.ID).Delete(&models.OrderItem{}).Error; err != nil {
-		return fmt.Errorf("failed to delete order items: %w", err)
-	}
+		// Unpaid orders still hold reserved stock; cancelled orders were
+		// already restocked, and shipped/delivered ones are genuinely sold.
+		if order.Status == models.OrderStatusAwaitingPayment {
+			if err := restockOrderItems(tx, order.Items); err != nil {
+				return err
+			}
+		}
 
-	if err := s.db.WithContext(ctx).Delete(&models.Order{}, order.ID).Error; err != nil {
-		return fmt.Errorf("failed to delete order: %w", err)
-	}
+		if err := tx.Where("order_id = ?", order.ID).Delete(&models.OrderItem{}).Error; err != nil {
+			return fmt.Errorf("failed to delete order items: %w", err)
+		}
 
+		if err := tx.Delete(&models.Order{}, order.ID).Error; err != nil {
+			return fmt.Errorf("failed to delete order: %w", err)
+		}
+
+		return nil
+	})
+}
+
+func restockOrderItems(tx *gorm.DB, items []models.OrderItem) error {
+	for _, item := range items {
+		if item.Quantity <= 0 {
+			continue
+		}
+		if err := tx.Model(&models.Product{}).
+			Where("id = ?", item.ProductID).
+			UpdateColumn("stock", gorm.Expr("stock + ?", item.Quantity)).Error; err != nil {
+			return fmt.Errorf("failed to restore product stock: %w", err)
+		}
+	}
 	return nil
 }
 
 func (s *OrderService) findAccessibleOrder(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error) {
 	query := s.db.WithContext(ctx).Model(&models.Order{})
+	if actorRole != constants.RoleAdmin {
+		query = query.Where("user_id = ?", actorID)
+	}
+
+	return preloadOrder(query, orderID)
+}
+
+// findAccessibleOrderForUpdate locks the order row for the duration of the
+// surrounding transaction so status changes, deletions and payment webhooks
+// cannot interleave on the same order.
+func findAccessibleOrderForUpdate(tx *gorm.DB, actorID, orderID uint, actorRole string) (*models.Order, error) {
+	query := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&models.Order{})
 	if actorRole != constants.RoleAdmin {
 		query = query.Where("user_id = ?", actorID)
 	}

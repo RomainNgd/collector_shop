@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/url"
 	"poc-gin/models"
+	"poc-gin/pkg/logger"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ type OrderCheckoutSessionResult struct {
 
 type OrderPaymentServiceInterface interface {
 	CreateStripeCheckoutSession(ctx context.Context, actorID, orderID uint, actorRole, successURL, cancelURL string) (*OrderCheckoutSessionResult, error)
+	ReleaseCheckoutSession(ctx context.Context, actorID, orderID uint, actorRole string) error
 	HandleStripeWebhook(ctx context.Context, payload []byte, signature string) error
 }
 
@@ -175,6 +177,51 @@ func (s *OrderPaymentService) createCheckoutSession(ctx context.Context, order *
 	}, nil
 }
 
+// ReleaseCheckoutSession expires any still-open Stripe checkout session tied
+// to the order, so a deleted order cannot be paid afterwards through a
+// checkout URL the customer kept open.
+func (s *OrderPaymentService) ReleaseCheckoutSession(ctx context.Context, actorID, orderID uint, actorRole string) error {
+	ctx, cancel := withDBTimeout(ctx)
+	defer cancel()
+
+	if s.stripe == nil || !s.stripe.Enabled() {
+		return nil
+	}
+
+	order, err := s.orderService.GetOrderByID(ctx, actorID, orderID, actorRole)
+	if err != nil {
+		return err
+	}
+	if order.StripeCheckoutSessionID == "" {
+		return nil
+	}
+
+	session, err := s.stripe.GetCheckoutSession(ctx, order.StripeCheckoutSessionID)
+	if errors.Is(err, ErrStripeSessionNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if session.Status != "open" {
+		return nil
+	}
+
+	expiredSession, err := s.stripe.ExpireCheckoutSession(ctx, order.StripeCheckoutSessionID)
+	if errors.Is(err, ErrStripeSessionNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if _, err := s.applyCheckoutSessionState(ctx, expiredSession, ""); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *OrderPaymentService) HandleStripeWebhook(ctx context.Context, payload []byte, signature string) error {
 	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
@@ -194,6 +241,12 @@ func (s *OrderPaymentService) HandleStripeWebhook(ctx context.Context, payload [
 		stripeEventCheckoutAsyncPaymentFailed,
 		stripeEventCheckoutAsyncPaymentSuccess:
 		_, err := s.applyCheckoutSessionState(ctx, &event.CheckoutSession, event.Type)
+		// A session that no longer maps to an order (e.g. the order was
+		// deleted) is not an error worth Stripe retrying the delivery for.
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			logger.Warn("Stripe webhook %s references no known order (session %s), acknowledging", event.Type, event.CheckoutSession.ID)
+			return nil
+		}
 		return err
 	default:
 		return nil

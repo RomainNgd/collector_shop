@@ -73,12 +73,15 @@ func TestProductServiceCRUDAndPreload(t *testing.T) {
 		t.Fatalf("expected no promotion on get, got effective=%f promotion=%#v", found.EffectivePrice, found.AppliedPromotion)
 	}
 
-	all, err := service.GetAllProducts(context.Background(), nil)
+	all, total, err := service.GetAllProducts(context.Background(), nil, Pagination{})
 	if err != nil {
 		t.Fatalf("expected list success, got %v", err)
 	}
 	if len(all) == 0 {
 		t.Fatal("expected at least one product")
+	}
+	if total != int64(len(all)) {
+		t.Fatalf("expected total %d to match returned count %d", total, len(all))
 	}
 
 	updated, err := service.UpdateProduct(context.Background(), seller.ID, seller.Role, product.ID, map[string]interface{}{
@@ -147,7 +150,7 @@ func TestProductServiceGetAllProductsExcludesOwnSeller(t *testing.T) {
 	ownProduct := seedProduct(t, tx, category.ID)
 	otherProduct := seedProduct(t, tx, category.ID)
 
-	all, err := service.GetAllProducts(context.Background(), ownProduct.SellerID)
+	all, _, err := service.GetAllProducts(context.Background(), ownProduct.SellerID, Pagination{})
 	if err != nil {
 		t.Fatalf("expected list success, got %v", err)
 	}
@@ -166,6 +169,69 @@ func TestProductServiceGetAllProductsExcludesOwnSeller(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected other seller's product %d to remain in catalog", otherProduct.ID)
+	}
+}
+
+func TestProductServiceGetAllProductsPagination(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+	service := NewProductService(tx)
+
+	for i := 0; i < 3; i++ {
+		seedProduct(t, tx, category.ID)
+	}
+
+	firstPage, total, err := service.GetAllProducts(context.Background(), nil, Pagination{Limit: 2, Offset: 0})
+	if err != nil {
+		t.Fatalf("expected first page success, got %v", err)
+	}
+	if total < 3 {
+		t.Fatalf("expected total of at least 3, got %d", total)
+	}
+	if len(firstPage) != 2 {
+		t.Fatalf("expected 2 products on first page, got %d", len(firstPage))
+	}
+
+	secondPage, totalAgain, err := service.GetAllProducts(context.Background(), nil, Pagination{Limit: 2, Offset: 2})
+	if err != nil {
+		t.Fatalf("expected second page success, got %v", err)
+	}
+	if totalAgain != total {
+		t.Fatalf("expected stable total across pages, got %d then %d", total, totalAgain)
+	}
+	if len(secondPage) == 0 {
+		t.Fatal("expected at least one product on second page")
+	}
+
+	firstIDs := make(map[uint]bool, len(firstPage))
+	for _, p := range firstPage {
+		firstIDs[p.ID] = true
+	}
+	for _, p := range secondPage {
+		if firstIDs[p.ID] {
+			t.Fatalf("expected no overlap between pages, product %d appeared twice", p.ID)
+		}
+	}
+}
+
+func TestProductServiceGetAllProductsLimitIsCapped(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+	service := NewProductService(tx)
+
+	for i := 0; i < MaxPageLimit+5; i++ {
+		seedProduct(t, tx, category.ID)
+	}
+
+	page, total, err := service.GetAllProducts(context.Background(), nil, Pagination{Limit: 100000})
+	if err != nil {
+		t.Fatalf("expected list success, got %v", err)
+	}
+	if total < int64(MaxPageLimit+5) {
+		t.Fatalf("expected total to reflect all seeded products, got %d", total)
+	}
+	if len(page) != MaxPageLimit {
+		t.Fatalf("expected page size capped at %d, got %d", MaxPageLimit, len(page))
 	}
 }
 
@@ -512,4 +578,72 @@ func TestCategoryDeletionRestrictedWhenProductReferencesIt(t *testing.T) {
 	if !errors.Is(err, ErrCategoryInUse) {
 		t.Fatalf("expected ErrCategoryInUse, got %v", err)
 	}
+}
+
+func TestProductServiceGetProductForManagement(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+	service := NewProductService(tx)
+
+	t.Run("owner can manage their own product", func(t *testing.T) {
+		product := seedProduct(t, tx, category.ID)
+
+		found, err := service.GetProductForManagement(context.Background(), *product.SellerID, constants.RoleUser, product.ID)
+		if err != nil {
+			t.Fatalf("expected success for owner, got %v", err)
+		}
+		if found.ID != product.ID {
+			t.Fatalf("expected product %d, got %d", product.ID, found.ID)
+		}
+		if found.Category.ID != category.ID {
+			t.Fatalf("expected preloaded category, got %#v", found.Category)
+		}
+	})
+
+	t.Run("admin can manage any product", func(t *testing.T) {
+		product := seedProduct(t, tx, category.ID)
+		admin := seedUser(t, tx, constants.RoleAdmin)
+
+		found, err := service.GetProductForManagement(context.Background(), admin.ID, constants.RoleAdmin, product.ID)
+		if err != nil {
+			t.Fatalf("expected success for admin, got %v", err)
+		}
+		if found.ID != product.ID {
+			t.Fatalf("expected product %d, got %d", product.ID, found.ID)
+		}
+	})
+
+	t.Run("non-owner is denied", func(t *testing.T) {
+		product := seedProduct(t, tx, category.ID)
+		other := seedUser(t, tx, constants.RoleUser)
+
+		_, err := service.GetProductForManagement(context.Background(), other.ID, constants.RoleUser, product.ID)
+		if !errors.Is(err, ErrProductAccessDenied) {
+			t.Fatalf("expected ErrProductAccessDenied, got %v", err)
+		}
+	})
+
+	t.Run("owner can manage an inactive out-of-stock product", func(t *testing.T) {
+		product := seedProduct(t, tx, category.ID)
+		if err := tx.Model(product).Updates(map[string]interface{}{"is_active": false, "stock": 0}).Error; err != nil {
+			t.Fatalf("failed to deactivate product: %v", err)
+		}
+
+		found, err := service.GetProductForManagement(context.Background(), *product.SellerID, constants.RoleUser, product.ID)
+		if err != nil {
+			t.Fatalf("expected management access to bypass catalog filters, got %v", err)
+		}
+		if found.IsActive {
+			t.Fatal("expected fetched product to reflect inactive state")
+		}
+	})
+
+	t.Run("returns not found for unknown product", func(t *testing.T) {
+		user := seedUser(t, tx, constants.RoleUser)
+
+		_, err := service.GetProductForManagement(context.Background(), user.ID, constants.RoleUser, 9999999)
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatalf("expected ErrRecordNotFound, got %v", err)
+		}
+	})
 }

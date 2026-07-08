@@ -32,13 +32,15 @@ func (h *OrderHandler) FindOrder(c *gin.Context) {
 		return
 	}
 
-	orders, err := h.orderService.GetOrdersForUser(ctx, userID)
+	limit, offset := paginationParams(c)
+	orders, total, err := h.orderService.GetOrdersForUser(ctx, userID, services.Pagination{Limit: limit, Offset: offset})
 	if err != nil {
 		logger.Error("Failed to fetch orders for user %d: %v", userID, err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch orders", nil)
 		return
 	}
 
+	setPaginationHeaders(c, total, limit, offset)
 	RespondSuccess(c, http.StatusOK, orders)
 }
 
@@ -203,6 +205,18 @@ func (h *OrderHandler) DeleteOrder(c *gin.Context) {
 
 	userID, role, orderID, ok := h.readActorAndOrderID(c)
 	if !ok {
+		return
+	}
+
+	// Close any open Stripe checkout first: deleting the order while its
+	// payment page stays payable would take money for a vanished order.
+	if err := h.orderPayments.ReleaseCheckoutSession(ctx, userID, orderID, role); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			RespondError(c, http.StatusNotFound, "ORDER_NOT_FOUND", errorOrderNotFound, nil)
+			return
+		}
+		logger.Error("Failed to release checkout session for order %d and user %d: %v", orderID, userID, err)
+		RespondError(c, http.StatusBadGateway, "PAYMENT_SESSION_RELEASE_FAILED", "Failed to release the pending payment session", nil)
 		return
 	}
 

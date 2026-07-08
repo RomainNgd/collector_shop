@@ -54,13 +54,14 @@ Score = probabilité × impact
 | ------ | ---------------------------------------------------- | ----------: | -----: | ----: | -------- | ------------------------------------------- |
 | SEC-01 | La CI accepte les vulnérabilités hautes et critiques |           3 |      4 |    12 | P0       | Corrigé localement, CI à confirmer          |
 | SEC-02 | SonarCloud peut être ignoré sans faire échouer la CI |           2 |      4 |     8 | P1       | Corrigé localement, SonarCloud à confirmer  |
-| SEC-03 | Aucune limitation des tentatives de connexion        |           3 |      3 |     9 | P1       | À traiter                                   |
+| SEC-03 | Aucune limitation des tentatives de connexion        |           3 |      3 |     9 | P1       | Corrigé localement, déploiement à confirmer |
 | SEC-04 | En-têtes HTTP de sécurité incomplets                 |           3 |      3 |     9 | P1       | À traiter                                   |
 | SEC-05 | Déploiement d'images utilisant le tag `latest`       |           2 |      4 |     8 | P1       | À traiter                                   |
 | SEC-06 | Sauvegarde et restauration PostgreSQL non définies   |           2 |      4 |     8 | P1       | À traiter                                   |
 | SEC-07 | Durcissement et isolation Kubernetes incomplets      |           2 |      3 |     6 | P2       | Corrigé localement, déploiement à confirmer |
 | SEC-08 | Cycle de vie des JWT limité                          |           2 |      3 |     6 | P2       | Planifié                                    |
 | SEC-09 | Détection et alertes de sécurité insuffisantes       |           2 |      3 |     6 | P2       | Planifié                                    |
+| SEC-10 | Uploads sur disque local : go-api limité à 1 replica |           1 |      3 |     3 | P2       | Planifié                                    |
 
 ## 5. Actions détaillées
 
@@ -294,6 +295,25 @@ sum(rate(collector_http_requests_total{route="/auth/login",status="401"}[5m])) >
 
 **Responsable :** DevOps — **Échéance :** itération suivante.
 
+### SEC-10 — Basculer les uploads d'images sur un stockage objet
+
+**Constat :** `FileService` (`go-api/services/file_service.go`) écrit les images directement sur le disque du pod (`cfg.Upload.Dir`, monté depuis le `PersistentVolumeClaim` `go-api-uploads` en `ReadWriteOnce`). `main.go` sert ensuite ces fichiers via `r.Static("/upload", cfg.Upload.Dir)`, donc l'API lit et écrit sur le même volume qu'elle sert.
+
+**Risque :** un PVC `ReadWriteOnce` ne peut être monté en écriture que par un seul pod à la fois. Le déploiement `go-api` (`prod/k3s/go-api.yaml`) est donc plafonné à `replicas: 1` de façon structurelle — passer à plusieurs répliques (pour absorber une hausse de charge ou faire du rolling update sans coupure) est aujourd'hui impossible sans d'abord régler ce point. Ce n'est pas un risque de sécurité au sens strict, mais un plafond dur de scalabilité et de disponibilité (un seul pod = point de panne unique).
+
+**Correction technique :**
+
+1. Ajouter une implémentation de `services.FileServiceInterface` (déjà définie par `SaveImage(file *multipart.FileHeader) (string, error)` et `DeleteImage(filename string) error` — aucun changement d'interface requis, donc aucun changement dans `controllers/products.go`) basée sur un client S3 compatible (AWS S3, MinIO auto-hébergé, ou Cloudflare R2). Le SDK `github.com/aws/aws-sdk-go-v2/service/s3` fonctionne avec les trois.
+2. Réutiliser telles quelles les validations déjà présentes dans `FileService` (extension autorisée, taille max, signature magic-bytes via `isAllowedImageContent`) avant l'upload vers le bucket — ce sont des contrôles de sécurité indépendants du backend de stockage.
+3. Ajouter `StorageDriver` (`local` par défaut, `s3` en option) à `config.UploadConfig`, avec les variables `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT` (pour MinIO/R2), `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. Instancier l'implémentation correspondante dans `main.go` (`services.NewFileService` devient un sélecteur, ou `NewS3FileService` est appelé conditionnellement).
+4. Remplacer `r.Static("/upload", cfg.Upload.Dir)` par une redirection : `GET /upload/:filename` répond `302 Found` vers une URL S3 publique ou pré-signée (durée de validité courte si le bucket est privé). Cela conserve le contrat d'URL déjà utilisé par le SPA (`collector-spa/src/lib/types.ts:217`, `${apiBaseUrl}/upload/${filename}`) sans nécessiter de changement côté frontend.
+5. Migrer les fichiers déjà présents sur le PVC vers le bucket (script one-shot `aws s3 cp --recursive` ou équivalent MinIO), puis supprimer le PVC `go-api-uploads` et le `volumeMount` correspondant dans `prod/k3s/go-api.yaml`.
+6. Une fois le PVC retiré, passer `replicas` à 2+ sur le déploiement `go-api` et ajouter un `HorizontalPodAutoscaler` (le même pattern que `prod/k3s/collector-spa-hpa.yaml`), maintenant possible grâce aux `resources.requests` déjà présents sur `go-api` (SEC-07).
+
+**Validation :** uploader une image produit, vérifier qu'elle atterrit dans le bucket et non sur le disque du pod ; couper un pod `go-api` en cours de service et vérifier que l'image reste accessible via l'autre réplique ; confirmer qu'aucune régression n'apparaît dans les tests `controllers/products_test.go` (mocks `FileServiceInterface` inchangés).
+
+**Responsable :** développeur back-end et DevOps — **Échéance :** avant tout passage à plusieurs répliques de `go-api`.
+
 ## 6. Ordre de mise en œuvre
 
 ### Phase 1 — Sécuriser la livraison
@@ -314,6 +334,7 @@ sum(rate(collector_http_requests_total{route="/auth/login",status="401"}[5m])) >
 1. Durcir les pods et ajouter les règles réseau.
 2. Renforcer le cycle de vie des JWT.
 3. Ajouter les alertes de sécurité.
+4. Basculer les uploads vers un stockage objet pour lever le plafond à une réplique.
 
 ## 7. Suivi du plan
 
@@ -324,6 +345,8 @@ sum(rate(collector_http_requests_total{route="/auth/login",status="401"}[5m])) >
 | 05/07/2026 | SEC-01 | Scans bloquants, dépendances mises à jour, Go 1.26.4 et outils npm inutiles retirés du runtime | Tests réussis et scan Trivy du dépôt à 0 résultat bloquant | Validation CI attendue         |
 | 05/07/2026 | SEC-02 | Quality Gate obligatoire, action v6, organisation corrigée et secrets de test aléatoires       | Tests Go réussis ; nouveau scan SonarCloud attendu         | Validation SonarCloud attendue |
 | 05/07/2026 | SEC-07 | `securityContext`, utilisateur non-root et volumes inscriptibles ajoutés                       | Trivy : 0 mauvaise configuration haute ou critique         | Validation K3s attendue        |
+| 08/07/2026 | SEC-03 | Rate limiting en mémoire (token bucket par IP) sur `/auth/login` et `/auth/register`, 429 + `Retry-After` | Tests Go réussis (`middlewares/rate_limit_middleware_test.go`) | Validation déploiement attendue |
+| 08/07/2026 | SEC-07 | `resources.requests/limits` ajoutés sur `go-api` ; probes TCP remplacées par `/healthz` et `/readyz` | Tests Go réussis, vérification manuelle en local (200 sur les deux endpoints) | Validation déploiement attendue |
 
 Pour passer une action à l'état **Corrigé**, il faut conserver :
 

@@ -65,4 +65,26 @@ func TestPaymentHandlerHandleStripeWebhook(t *testing.T) {
 			t.Fatalf("expected 200, got %d", recorder.Code)
 		}
 	})
+
+	t.Run("returns 400 when payload exceeds the max body size", func(t *testing.T) {
+		handler := NewPaymentHandler(&mockOrderPaymentService{
+			handleWebhookFn: func(payload []byte, signature string) error {
+				t.Fatal("expected oversized payload to be rejected before reaching the service")
+				return nil
+			},
+		})
+
+		oversized := strings.NewReader(strings.Repeat("a", stripeWebhookMaxBodyBytes+1))
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		req, _ := http.NewRequest(http.MethodPost, "/payments/stripe/webhook", oversized)
+		req.Header.Set("Stripe-Signature", "t=1,v1=test")
+		ctx.Request = req
+
+		handler.HandleStripeWebhook(ctx)
+
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", recorder.Code)
+		}
+	})
 }

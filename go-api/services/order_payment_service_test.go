@@ -14,9 +14,11 @@ import (
 type fakeStripeService struct {
 	createFn    func(input StripeCheckoutSessionInput) (*StripeCheckoutSession, error)
 	getFn       func(sessionID string) (*StripeCheckoutSession, error)
+	expireFn    func(sessionID string) (*StripeCheckoutSession, error)
 	webhookFn   func(payload []byte, signature string) (*StripeWebhookEvent, error)
 	createCalls int
 	getCalls    int
+	expireCalls int
 }
 
 func (f *fakeStripeService) Enabled() bool {
@@ -37,6 +39,14 @@ func (f *fakeStripeService) GetCheckoutSession(_ context.Context, sessionID stri
 		return f.getFn(sessionID)
 	}
 	return nil, fmt.Errorf("unexpected GetCheckoutSession call")
+}
+
+func (f *fakeStripeService) ExpireCheckoutSession(_ context.Context, sessionID string) (*StripeCheckoutSession, error) {
+	f.expireCalls++
+	if f.expireFn != nil {
+		return f.expireFn(sessionID)
+	}
+	return nil, fmt.Errorf("unexpected ExpireCheckoutSession call")
 }
 
 func (f *fakeStripeService) ConstructWebhookEvent(_ []byte, _ string) (*StripeWebhookEvent, error) {
@@ -434,5 +444,125 @@ func TestOrderPaymentServiceWebhookMarksAsyncPaymentSucceeded(t *testing.T) {
 	}
 	if updatedOrder.StripePaymentIntentID != "pi_test_async_success" {
 		t.Fatalf("expected payment intent id to be stored, got %s", updatedOrder.StripePaymentIntentID)
+	}
+}
+
+func TestOrderPaymentServiceReleaseCheckoutSessionExpiresOpenSession(t *testing.T) {
+	tx := openIntegrationTx(t)
+	orderService := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID)
+
+	order, err := orderService.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 1},
+	})
+	if err != nil {
+		t.Fatalf("expected order creation success, got %v", err)
+	}
+
+	stripeService := &fakeStripeService{
+		createFn: func(input StripeCheckoutSessionInput) (*StripeCheckoutSession, error) {
+			return &StripeCheckoutSession{
+				ID:            "cs_test_release",
+				URL:           "https://checkout.stripe.com/c/pay/cs_test_release",
+				Status:        "open",
+				PaymentStatus: "unpaid",
+				Metadata:      input.Metadata,
+			}, nil
+		},
+		getFn: func(sessionID string) (*StripeCheckoutSession, error) {
+			return &StripeCheckoutSession{
+				ID:            sessionID,
+				URL:           "https://checkout.stripe.com/c/pay/" + sessionID,
+				Status:        "open",
+				PaymentStatus: "unpaid",
+			}, nil
+		},
+		expireFn: func(sessionID string) (*StripeCheckoutSession, error) {
+			return &StripeCheckoutSession{
+				ID:            sessionID,
+				Status:        "expired",
+				PaymentStatus: "unpaid",
+			}, nil
+		},
+	}
+
+	service := NewOrderPaymentService(tx, stripeService, orderService)
+	if _, err := service.CreateStripeCheckoutSession(
+		context.Background(),
+		user.ID,
+		order.ID,
+		constants.RoleUser,
+		"https://shop.example/success",
+		"https://shop.example/cancel",
+	); err != nil {
+		t.Fatalf("expected checkout session creation success, got %v", err)
+	}
+
+	if err := service.ReleaseCheckoutSession(context.Background(), user.ID, order.ID, constants.RoleUser); err != nil {
+		t.Fatalf("expected release success, got %v", err)
+	}
+	if stripeService.expireCalls != 1 {
+		t.Fatalf("expected one expire call, got %d", stripeService.expireCalls)
+	}
+
+	updatedOrder, err := orderService.GetOrderByID(context.Background(), user.ID, order.ID, constants.RoleUser)
+	if err != nil {
+		t.Fatalf("expected order fetch success, got %v", err)
+	}
+	if updatedOrder.PaymentStatus != models.OrderPaymentStatusExpired {
+		t.Fatalf("expected expired payment status, got %s", updatedOrder.PaymentStatus)
+	}
+}
+
+func TestOrderPaymentServiceReleaseCheckoutSessionWithoutSessionIsNoop(t *testing.T) {
+	tx := openIntegrationTx(t)
+	orderService := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID)
+
+	order, err := orderService.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 1},
+	})
+	if err != nil {
+		t.Fatalf("expected order creation success, got %v", err)
+	}
+
+	stripeService := &fakeStripeService{}
+	service := NewOrderPaymentService(tx, stripeService, orderService)
+
+	if err := service.ReleaseCheckoutSession(context.Background(), user.ID, order.ID, constants.RoleUser); err != nil {
+		t.Fatalf("expected noop release success, got %v", err)
+	}
+	if stripeService.getCalls != 0 || stripeService.expireCalls != 0 {
+		t.Fatalf("expected no stripe calls, got get=%d expire=%d", stripeService.getCalls, stripeService.expireCalls)
+	}
+}
+
+func TestOrderPaymentServiceWebhookAcknowledgesUnknownSession(t *testing.T) {
+	tx := openIntegrationTx(t)
+	orderService := NewOrderService(tx)
+
+	stripeService := &fakeStripeService{
+		webhookFn: func(payload []byte, signature string) (*StripeWebhookEvent, error) {
+			return &StripeWebhookEvent{
+				Type: stripeEventCheckoutCompleted,
+				CheckoutSession: StripeCheckoutSession{
+					ID:            "cs_test_orphan",
+					Status:        "complete",
+					PaymentStatus: "paid",
+					Metadata: map[string]string{
+						"order_id": "999999",
+					},
+				},
+			}, nil
+		},
+	}
+
+	service := NewOrderPaymentService(tx, stripeService, orderService)
+	if err := service.HandleStripeWebhook(context.Background(), []byte(`{}`), "t=1,v1=test"); err != nil {
+		t.Fatalf("expected orphan webhook to be acknowledged, got %v", err)
 	}
 }

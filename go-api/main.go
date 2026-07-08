@@ -10,7 +10,6 @@ import (
 	"poc-gin/controllers"
 	"poc-gin/database"
 	"poc-gin/middlewares"
-	"poc-gin/models"
 	"poc-gin/pkg/logger"
 	appmetrics "poc-gin/pkg/metrics"
 	"poc-gin/routes"
@@ -60,7 +59,7 @@ func runServer(cfg *config.Config) error {
 
 	if cfg.Database.AutoMigrate {
 		logger.Info("Running database migrations...")
-		if err := migrateDatabase(db.DB); err != nil {
+		if err := database.Migrate(&cfg.Database); err != nil {
 			return fmt.Errorf("database migration failed: %w", err)
 		}
 		logger.Info("Database migrations completed")
@@ -80,6 +79,10 @@ func runServer(cfg *config.Config) error {
 	orderPaymentService := services.NewOrderPaymentService(db.DB, stripeService, orderService, cfg.Stripe.CheckoutAllowedOrigins)
 
 	authMiddleware := middlewares.NewAuthMiddleware(cfg.JWT.Secret)
+	authRateLimiter := middlewares.NewRateLimiter(
+		cfg.RateLimit.AuthRequests,
+		time.Duration(cfg.RateLimit.AuthWindowSeconds)*time.Second,
+	)
 
 	categoryHandler := controllers.NewCategoryHandler(categoryService)
 	productHandler := controllers.NewProductHandler(productService, categoryService, fileService)
@@ -87,6 +90,7 @@ func runServer(cfg *config.Config) error {
 	authHandler := controllers.NewAuthHandler(authService)
 	orderHandler := controllers.NewOrderHandler(orderService, orderPaymentService)
 	paymentHandler := controllers.NewPaymentHandler(orderPaymentService)
+	healthHandler := controllers.NewHealthHandler(db)
 
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery(), appmetrics.Middleware())
@@ -94,7 +98,8 @@ func runServer(cfg *config.Config) error {
 	// Static files must be registered BEFORE dynamic routes
 	r.Static("/upload", cfg.Upload.Dir)
 
-	routes.SetupAuthRoutes(r, authHandler)
+	routes.SetupHealthRoutes(r, healthHandler)
+	routes.SetupAuthRoutes(r, authHandler, authRateLimiter)
 	routes.SetupCategoryRoutes(r, categoryHandler, authMiddleware)
 	routes.SetupProductRoutes(r, productHandler, authMiddleware)
 	routes.SetupPromotionRoutes(r, promotionHandler, authMiddleware)
@@ -102,8 +107,12 @@ func runServer(cfg *config.Config) error {
 	routes.SetupPaymentRoutes(r, paymentHandler)
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%s", cfg.Server.Port),
-		Handler: r,
+		Addr:              fmt.Sprintf(":%s", cfg.Server.Port),
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", appmetrics.Handler())
@@ -159,7 +168,7 @@ func runSeed(cfg *config.Config) error {
 	}()
 
 	logger.Info("Running database migrations before seed...")
-	if err := migrateDatabase(db.DB); err != nil {
+	if err := database.Migrate(&cfg.Database); err != nil {
 		return fmt.Errorf("database migration failed: %w", err)
 	}
 
@@ -175,15 +184,4 @@ func runSeed(cfg *config.Config) error {
 	logger.Info("Demo data seeded successfully: %s", report.Summary())
 	logger.Info("Seeded accounts")
 	return nil
-}
-
-func migrateDatabase(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&models.Category{},
-		&models.User{},
-		&models.Product{},
-		&models.Promotion{},
-		&models.Order{},
-		&models.OrderItem{},
-	)
 }

@@ -106,6 +106,65 @@ func TestGetEnvAsInt64(t *testing.T) {
 	}
 }
 
+func TestGetEnvAsInt(t *testing.T) {
+	key := "TEST_RATE_LIMIT_REQUESTS"
+	t.Cleanup(func() { _ = os.Unsetenv(key) })
+
+	if err := os.Setenv(key, "42"); err != nil {
+		t.Fatalf("failed to set env: %v", err)
+	}
+	if got := getEnvAsInt(key, 1); got != 42 {
+		t.Fatalf("expected 42, got %d", got)
+	}
+
+	if err := os.Setenv(key, "not-a-number"); err != nil {
+		t.Fatalf("failed to set env: %v", err)
+	}
+	if got := getEnvAsInt(key, 7); got != 7 {
+		t.Fatalf("expected fallback 7, got %d", got)
+	}
+
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatalf("failed to unset env: %v", err)
+	}
+	if got := getEnvAsInt(key, 3); got != 3 {
+		t.Fatalf("expected fallback 3 when unset, got %d", got)
+	}
+}
+
+func TestGetEnvList(t *testing.T) {
+	key := "TEST_ALLOWED_ORIGINS"
+	t.Cleanup(func() { _ = os.Unsetenv(key) })
+
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatalf("failed to unset env: %v", err)
+	}
+	if got := getEnvList(key); got != nil {
+		t.Fatalf("expected nil for unset env, got %#v", got)
+	}
+
+	if err := os.Setenv(key, "https://a.test, https://b.test,,https://c.test"); err != nil {
+		t.Fatalf("failed to set env: %v", err)
+	}
+	got := getEnvList(key)
+	want := []string{"https://a.test", "https://b.test", "https://c.test"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %v, got %v", want, got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, got)
+		}
+	}
+
+	if err := os.Setenv(key, "   ,  ,"); err != nil {
+		t.Fatalf("failed to set env: %v", err)
+	}
+	if got := getEnvList(key); len(got) != 0 {
+		t.Fatalf("expected empty slice for blank entries, got %#v", got)
+	}
+}
+
 func TestLoad(t *testing.T) {
 	keys := []string{
 		"PORT", "METRICS_PORT", "DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME",
