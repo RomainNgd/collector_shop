@@ -129,6 +129,23 @@ Le suivi du nombre et de l'ancienneté des vulnérabilités empêche leur accumu
 
 Ces quatre métriques doivent être observées à chaque évolution du projet. Leur tendance est aussi importante que leur valeur : une dégradation régulière doit entraîner une correction avant l'ajout de nouvelles fonctionnalités.
 
+## Mesures relevées le 08/07/2026
+
+| Métrique | Valeur mesurée | Méthode de mesure | Conforme ? |
+|---|---|---|---|
+| Couverture API Go | **81,3 %** au global (153 fonctions de test, toutes vertes) | `go test ./... -coverprofile` puis `go tool cover -func` | Oui pour le seuil global de 80 % |
+| Couverture front | **94,7 %** des instructions (97 tests dans 19 fichiers, tous verts) | `npm run test:coverage` (Vitest, rapport v8) | Oui |
+| Complexité et duplication | Suivies par la Quality Gate SonarCloud, bloquante en CI ; relevé à capturer sur le tableau de bord à chaque exécution | SonarCloud (`sonar.qualitygate.wait=true`) | Oui tant que la Quality Gate est verte |
+| Vulnérabilités | **0** vulnérabilité haute ou critique, 0 secret, 0 mauvaise configuration (scan du dépôt du 05/07/2026) | Trivy `vuln,secret,misconfig`, bloquant en CI | Oui |
+
+Détail de la couverture Go par paquet : `models` 100 %, `routes` 98,2 %, `config` 94,9 %, `pkg/metrics` 92,3 %, `middlewares` 90,3 %, `controllers` 85,7 %, `services` 85,1 %, `database` 78,3 %.
+
+### Axes d'amélioration mis en évidence
+
+1. **Code critique sous le seuil renforcé** : `controllers` (85,7 %) et `services` (85,1 %) portent l'authentification, les commandes et les paiements, dont le seuil cible est 90 %. Les prochains tests doivent viser en priorité les branches non couvertes de ces deux paquets.
+2. **Paquet `database` à 78,3 %**, sous le seuil global de 80 % : les chemins d'erreur des migrations et du seed sont les moins testés ; à compléter avant d'enrichir le schéma.
+3. Ces deux écarts sont traités pendant qu'ils restent petits : c'est exactement le mécanisme anti-dette technique décrit plus haut — le seuil sur le *nouveau* code empêche l'écart de grandir, et la tendance par paquet indique où investir l'effort de test.
+
 ## Référence
 
 - [ISO/IEC 25010:2023 — Modèle de qualité du produit](https://www.iso.org/fr/standard/78176.html)
