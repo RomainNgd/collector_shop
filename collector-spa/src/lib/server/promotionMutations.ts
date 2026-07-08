@@ -1,7 +1,20 @@
-import { PROMOTION_TYPE_FIXED, PROMOTION_TYPE_PERCENTAGE, type ApiPromotion } from '$lib/types';
+import {
+	PROMOTION_TYPE_FIXED,
+	PROMOTION_TYPE_PERCENTAGE,
+	type ApiPromotion,
+	type AuthUser
+} from '$lib/types';
+import {
+	buildApiHeaders,
+	buildInternalApiPath,
+	getApiErrorMessage,
+	readApiResponse
+} from '$lib/server/api';
 import { getFormString, getFormStrings } from '$lib/server/forms';
 
 export type PromotionMutationApiData = ApiPromotion | { ID?: number; id?: number } | null;
+
+export type PromotionAction = 'create-promotion' | 'edit-promotion' | 'delete-promotion';
 
 export type PromotionFormValues = {
 	id?: string;
@@ -81,4 +94,142 @@ export const validatePromotionFormError = (
 	}
 
 	return null;
+};
+
+type MutationEvent = {
+	request: Request;
+	fetch: typeof fetch;
+	locals: { user: AuthUser | null };
+};
+
+type PromotionFailAction<TResult> = (
+	status: number,
+	action: PromotionAction,
+	message: string,
+	options?: { promotionValues?: PromotionFormValues; promotionId?: string }
+) => TResult;
+
+export const createPromotionActions = <TResult>(
+	requireActor: (user: AuthUser | null) => void,
+	failAction: PromotionFailAction<TResult>,
+	options?: { allowAppliesToAll?: boolean; emptyProductsMessage?: string }
+) => {
+	const allowAppliesToAll = options?.allowAppliesToAll ?? false;
+	const emptyProductsMessage = options?.emptyProductsMessage;
+
+	const buildPayload = (values: PromotionFormValues, value: number, productIds: number[]) => {
+		const appliesToAll = allowAppliesToAll && values.appliesToAll === 'true';
+		return {
+			name: values.name,
+			description: values.description,
+			type: values.type,
+			value,
+			is_active: values.isActive === 'true',
+			applies_to_all: appliesToAll,
+			product_ids: appliesToAll ? [] : productIds
+		};
+	};
+
+	return {
+		createPromotion: async ({ request, fetch, locals }: MutationEvent) => {
+			requireActor(locals.user);
+
+			const { values, value, productIds } = await readPromotionForm(request);
+			const validationMessage = validatePromotionFormError(values, value, productIds, {
+				emptyProductsMessage
+			});
+			if (validationMessage) {
+				return failAction(400, 'create-promotion', validationMessage, {
+					promotionValues: values
+				});
+			}
+
+			const response = await fetch(buildInternalApiPath('/promotions'), {
+				method: 'POST',
+				headers: buildApiHeaders({ contentType: 'application/json' }),
+				body: JSON.stringify(buildPayload(values, value, productIds))
+			});
+
+			const result = await readApiResponse<PromotionMutationApiData>(response);
+			const apiError = getApiErrorMessage(response, result, 'Impossible de creer la promotion');
+			if (apiError) {
+				return failAction(response.status || 500, 'create-promotion', apiError, {
+					promotionValues: values
+				});
+			}
+
+			return {
+				action: 'create-promotion' as const,
+				success: 'Promotion ajoutee avec succes'
+			};
+		},
+
+		updatePromotion: async ({ request, fetch, locals }: MutationEvent) => {
+			requireActor(locals.user);
+
+			const { id, values, value, productIds } = await readPromotionForm(request);
+			if (!id) {
+				return failAction(400, 'edit-promotion', 'Promotion introuvable', {
+					promotionValues: values
+				});
+			}
+
+			const validationMessage = validatePromotionFormError(values, value, productIds, {
+				emptyProductsMessage
+			});
+			if (validationMessage) {
+				return failAction(400, 'edit-promotion', validationMessage, {
+					promotionValues: values
+				});
+			}
+
+			const response = await fetch(buildInternalApiPath(`/promotions/${id}`), {
+				method: 'PUT',
+				headers: buildApiHeaders({ contentType: 'application/json' }),
+				body: JSON.stringify(buildPayload(values, value, productIds))
+			});
+
+			const result = await readApiResponse<PromotionMutationApiData>(response);
+			const apiError = getApiErrorMessage(response, result, 'Impossible de modifier la promotion');
+			if (apiError) {
+				return failAction(response.status || 500, 'edit-promotion', apiError, {
+					promotionValues: values,
+					promotionId: id
+				});
+			}
+
+			return {
+				action: 'edit-promotion' as const,
+				success: 'Promotion modifiee avec succes'
+			};
+		},
+
+		deletePromotion: async ({ request, fetch, locals }: MutationEvent) => {
+			requireActor(locals.user);
+
+			const promotionId = getFormString(await request.formData(), 'id').trim();
+			if (!promotionId) {
+				return failAction(400, 'delete-promotion', 'Promotion introuvable', {
+					promotionId
+				});
+			}
+
+			const response = await fetch(buildInternalApiPath(`/promotions/${promotionId}`), {
+				method: 'DELETE'
+			});
+
+			const result = await readApiResponse<PromotionMutationApiData>(response);
+			const apiError = getApiErrorMessage(response, result, 'Impossible de supprimer la promotion');
+			if (apiError) {
+				return failAction(response.status || 500, 'delete-promotion', apiError, {
+					promotionId
+				});
+			}
+
+			return {
+				action: 'delete-promotion' as const,
+				success: 'Promotion supprimee avec succes'
+			};
+		}
+	};
 };

@@ -1,8 +1,20 @@
-import { PROMOTION_TYPE_FIXED, PROMOTION_TYPE_PERCENTAGE, type ApiProduct } from '$lib/types';
-import { buildInternalApiPath, getApiErrorMessage, readApiResponse } from '$lib/server/api';
+import {
+	PROMOTION_TYPE_FIXED,
+	PROMOTION_TYPE_PERCENTAGE,
+	type ApiProduct,
+	type AuthUser
+} from '$lib/types';
+import {
+	buildApiHeaders,
+	buildInternalApiPath,
+	getApiErrorMessage,
+	readApiResponse
+} from '$lib/server/api';
 import { getFormString } from '$lib/server/forms';
 
 export type ProductMutationApiData = ApiProduct | { ID?: number; id?: number } | null;
+
+export type ProductAction = 'create-product' | 'edit-product' | 'delete-product';
 
 export type ProductFormValues = {
 	id?: string;
@@ -179,3 +191,184 @@ export const deleteProductImage = async (fetchFn: typeof fetch, productId: strin
 	const result = await readApiResponse<unknown>(response);
 	return getApiErrorMessage(response, result, "Impossible de supprimer l'image");
 };
+
+type MutationEvent = {
+	request: Request;
+	fetch: typeof fetch;
+	locals: { user: AuthUser | null };
+};
+
+type ProductFailAction<TResult> = (
+	status: number,
+	action: ProductAction,
+	message: string,
+	options?: { productValues?: ProductFormValues; productId?: string }
+) => TResult;
+
+export const createProductActions = <TResult>(
+	requireActor: (user: AuthUser | null) => void,
+	failAction: ProductFailAction<TResult>
+) => ({
+	createProduct: async ({ request, fetch, locals }: MutationEvent) => {
+		requireActor(locals.user);
+
+		const { values, price, imageFile } = await readProductForm(request);
+		const validationMessage = validateProductFormError(values, price, imageFile);
+		if (validationMessage) {
+			return failAction(400, 'create-product', validationMessage, { productValues: values });
+		}
+
+		const response = await fetch(buildInternalApiPath('/products'), {
+			method: 'POST',
+			headers: buildApiHeaders({ contentType: 'application/json' }),
+			body: JSON.stringify({
+				name: values.name,
+				price,
+				stock: Number(values.stock),
+				description: values.description,
+				category_id: Number(values.categoryId),
+				promotion_active: values.promotionActive === 'true',
+				promotion_type: values.promotionActive === 'true' ? values.promotionType : '',
+				promotion_value: values.promotionActive === 'true' ? Number(values.promotionValue) : 0
+			})
+		});
+
+		const result = await readApiResponse<ProductMutationApiData>(response);
+		const apiError = getApiErrorMessage(response, result, 'Impossible de creer le produit');
+		if (apiError) {
+			return failAction(response.status || 500, 'create-product', apiError, {
+				productValues: values
+			});
+		}
+
+		if (imageFile) {
+			const createdProductId = extractEntityId(result.payload?.data);
+			if (createdProductId === null) {
+				return failAction(
+					500,
+					'create-product',
+					"Produit cree, mais l'image n'a pas pu etre associee automatiquement",
+					{ productValues: values }
+				);
+			}
+
+			const imageError = await uploadProductImage(fetch, createdProductId, imageFile);
+			if (imageError) {
+				return failAction(
+					500,
+					'create-product',
+					`Produit cree, mais l'image n'a pas pu etre envoyee: ${imageError}`,
+					{ productValues: values }
+				);
+			}
+		}
+
+		return {
+			action: 'create-product' as const,
+			success: imageFile ? 'Produit et image ajoutes avec succes' : 'Produit ajoute avec succes'
+		};
+	},
+
+	updateProduct: async ({ request, fetch, locals }: MutationEvent) => {
+		requireActor(locals.user);
+
+		const { id, values, price, imageFile, removeImage } = await readProductForm(request);
+
+		if (!id) {
+			return failAction(400, 'edit-product', 'Produit introuvable', {
+				productValues: values
+			});
+		}
+
+		const validationMessage = validateProductFormError(values, price, imageFile);
+		if (validationMessage) {
+			return failAction(400, 'edit-product', validationMessage, { productValues: values });
+		}
+
+		const response = await fetch(buildInternalApiPath(`/products/${id}`), {
+			method: 'PUT',
+			headers: buildApiHeaders({ contentType: 'application/json' }),
+			body: JSON.stringify({
+				name: values.name,
+				price,
+				stock: Number(values.stock),
+				is_active: values.isActive === 'true',
+				description: values.description,
+				image: removeImage && !imageFile ? '' : (values.currentImageName ?? ''),
+				category_id: Number(values.categoryId),
+				promotion_active: values.promotionActive === 'true',
+				promotion_type: values.promotionActive === 'true' ? values.promotionType : '',
+				promotion_value: values.promotionActive === 'true' ? Number(values.promotionValue) : 0
+			})
+		});
+
+		const result = await readApiResponse<ProductMutationApiData>(response);
+		const apiError = getApiErrorMessage(response, result, 'Impossible de modifier le produit');
+		if (apiError) {
+			return failAction(response.status || 500, 'edit-product', apiError, {
+				productValues: values
+			});
+		}
+
+		if (removeImage && !imageFile) {
+			const imageDeleteError = await deleteProductImage(fetch, id);
+			if (imageDeleteError) {
+				return failAction(
+					500,
+					'edit-product',
+					`Produit modifie, mais l'image n'a pas pu etre supprimee: ${imageDeleteError}`,
+					{ productValues: values }
+				);
+			}
+		}
+
+		if (imageFile) {
+			const imageUploadError = await uploadProductImage(fetch, id, imageFile);
+			if (imageUploadError) {
+				return failAction(
+					500,
+					'edit-product',
+					`Produit modifie, mais l'image n'a pas pu etre envoyee: ${imageUploadError}`,
+					{ productValues: values }
+				);
+			}
+		}
+
+		return {
+			action: 'edit-product' as const,
+			success:
+				imageFile || removeImage
+					? 'Produit et image mis a jour avec succes'
+					: 'Produit modifie avec succes'
+		};
+	},
+
+	deleteProduct: async ({ request, fetch, locals }: MutationEvent) => {
+		requireActor(locals.user);
+
+		const productId = getFormString(await request.formData(), 'id').trim();
+
+		if (!productId) {
+			return failAction(400, 'delete-product', 'Produit introuvable', {
+				productId
+			});
+		}
+
+		const response = await fetch(buildInternalApiPath(`/products/${productId}`), {
+			method: 'DELETE'
+		});
+
+		const result = await readApiResponse<ProductMutationApiData>(response);
+		const apiError = getApiErrorMessage(response, result, 'Impossible de supprimer le produit');
+		if (apiError) {
+			return failAction(response.status || 500, 'delete-product', apiError, {
+				productId
+			});
+		}
+
+		return {
+			action: 'delete-product' as const,
+			success: 'Produit supprime avec succes'
+		};
+	}
+});
