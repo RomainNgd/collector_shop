@@ -13,7 +13,7 @@ func TestRouteRegistration(t *testing.T) {
 	router := gin.New()
 	authMiddleware := middlewares.NewAuthMiddleware("route-test-secret")
 
-	SetupAuthRoutes(router, controllers.NewAuthHandler(nil))
+	SetupAuthRoutes(router, controllers.NewAuthHandler(nil), nil)
 	SetupCategoryRoutes(router, controllers.NewCategoryHandler(nil), authMiddleware)
 	SetupProductRoutes(router, controllers.NewProductHandler(nil, nil, nil), authMiddleware)
 	SetupPromotionRoutes(router, controllers.NewPromotionHandler(nil), authMiddleware)

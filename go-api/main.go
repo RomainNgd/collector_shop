@@ -80,6 +80,10 @@ func runServer(cfg *config.Config) error {
 	orderPaymentService := services.NewOrderPaymentService(db.DB, stripeService, orderService, cfg.Stripe.CheckoutAllowedOrigins)
 
 	authMiddleware := middlewares.NewAuthMiddleware(cfg.JWT.Secret)
+	authRateLimiter := middlewares.NewRateLimiter(
+		cfg.RateLimit.AuthRequests,
+		time.Duration(cfg.RateLimit.AuthWindowSeconds)*time.Second,
+	)
 
 	categoryHandler := controllers.NewCategoryHandler(categoryService)
 	productHandler := controllers.NewProductHandler(productService, categoryService, fileService)
@@ -94,7 +98,7 @@ func runServer(cfg *config.Config) error {
 	// Static files must be registered BEFORE dynamic routes
 	r.Static("/upload", cfg.Upload.Dir)
 
-	routes.SetupAuthRoutes(r, authHandler)
+	routes.SetupAuthRoutes(r, authHandler, authRateLimiter)
 	routes.SetupCategoryRoutes(r, categoryHandler, authMiddleware)
 	routes.SetupProductRoutes(r, productHandler, authMiddleware)
 	routes.SetupPromotionRoutes(r, promotionHandler, authMiddleware)

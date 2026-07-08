@@ -149,7 +149,7 @@ func buildRouter(t *testing.T, tx *gorm.DB, secret string) *gin.Engine {
 	paymentHandler := controllers.NewPaymentHandler(orderPaymentService)
 
 	router := gin.New()
-	routes.SetupAuthRoutes(router, authHandler)
+	routes.SetupAuthRoutes(router, authHandler, nil)
 	routes.SetupCategoryRoutes(router, categoryHandler, authMiddleware)
 	routes.SetupProductRoutes(router, productHandler, authMiddleware)
 	routes.SetupPromotionRoutes(router, promotionHandler, authMiddleware)
