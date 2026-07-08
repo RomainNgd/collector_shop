@@ -19,7 +19,7 @@ var (
 )
 
 type ProductServiceInterface interface {
-	GetAllProducts(ctx context.Context, excludeSellerID *uint) ([]*models.Product, error)
+	GetAllProducts(ctx context.Context, excludeSellerID *uint, page Pagination) ([]*models.Product, int64, error)
 	GetProductsForSeller(ctx context.Context, sellerID uint) ([]*models.Product, error)
 	GetProductByID(ctx context.Context, id uint) (*models.Product, error)
 	GetProductForManagement(ctx context.Context, actorID uint, actorRole string, id uint) (*models.Product, error)
@@ -36,24 +36,40 @@ func NewProductService(db *gorm.DB) *ProductService {
 	return &ProductService{db: db}
 }
 
-func (s *ProductService) GetAllProducts(ctx context.Context, excludeSellerID *uint) ([]*models.Product, error) {
+func (s *ProductService) GetAllProducts(ctx context.Context, excludeSellerID *uint, page Pagination) ([]*models.Product, int64, error) {
 	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
-	query := s.db.WithContext(ctx).
-		Preload("Category").
-		Preload("Seller").
+	limit, offset := page.normalized()
+
+	baseQuery := s.db.WithContext(ctx).Model(&models.Product{}).
 		Where("is_active = ? AND stock > ?", true, 0)
 	if excludeSellerID != nil {
-		query = query.Where("seller_id IS NULL OR seller_id != ?", *excludeSellerID)
+		baseQuery = baseQuery.Where("seller_id IS NULL OR seller_id != ?", *excludeSellerID)
+	}
+
+	var total int64
+	if err := baseQuery.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count products: %w", err)
 	}
 
 	var products []*models.Product
-	if err := query.Find(&products).Error; err != nil {
-		return nil, fmt.Errorf("failed to fetch products: %w", err)
+	if err := baseQuery.
+		Preload("Category").
+		Preload("Seller").
+		Order("id ASC").
+		Limit(limit).
+		Offset(offset).
+		Find(&products).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to fetch products: %w", err)
 	}
 
-	return s.prepareProducts(ctx, products)
+	prepared, err := s.prepareProducts(ctx, products)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return prepared, total, nil
 }
 
 func (s *ProductService) GetProductsForSeller(ctx context.Context, sellerID uint) ([]*models.Product, error) {

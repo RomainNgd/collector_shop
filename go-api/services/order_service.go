@@ -31,7 +31,7 @@ type OrderItemInput struct {
 
 type OrderServiceInterface interface {
 	CreateOrder(ctx context.Context, userID uint, items []OrderItemInput) (*models.Order, error)
-	GetOrdersForUser(ctx context.Context, userID uint) ([]*models.Order, error)
+	GetOrdersForUser(ctx context.Context, userID uint, page Pagination) ([]*models.Order, int64, error)
 	GetOrderByID(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error)
 	UpdateOrderStatus(ctx context.Context, actorID, orderID uint, actorRole, status string) (*models.Order, error)
 	DeleteOrder(ctx context.Context, actorID, orderID uint, actorRole string) error
@@ -198,23 +198,34 @@ func addOrderItem(order *models.Order, item models.OrderItem) {
 	order.DiscountTotal = roundCurrency(order.DiscountTotal + item.LineDiscountTotal)
 }
 
-func (s *OrderService) GetOrdersForUser(ctx context.Context, userID uint) ([]*models.Order, error) {
+func (s *OrderService) GetOrdersForUser(ctx context.Context, userID uint, page Pagination) ([]*models.Order, int64, error) {
 	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
+
+	limit, offset := page.normalized()
+
+	var total int64
+	if err := s.db.WithContext(ctx).Model(&models.Order{}).
+		Where("user_id = ?", userID).
+		Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count orders: %w", err)
+	}
 
 	var orders []*models.Order
 	query := s.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
 		Preload("Items", func(db *gorm.DB) *gorm.DB {
 			return db.Order("id ASC")
 		})
 
 	if err := query.Find(&orders).Error; err != nil {
-		return nil, fmt.Errorf("failed to fetch orders: %w", err)
+		return nil, 0, fmt.Errorf("failed to fetch orders: %w", err)
 	}
 
-	return orders, nil
+	return orders, total, nil
 }
 
 func (s *OrderService) GetOrderByID(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error) {

@@ -125,11 +125,11 @@ func TestOrderHandlerCreateOrder(t *testing.T) {
 
 func TestOrderHandlerFindOrder(t *testing.T) {
 	handler := NewOrderHandler(&mockOrderService{
-		listFn: func(userID uint) ([]*models.Order, error) {
+		listFn: func(userID uint, page services.Pagination) ([]*models.Order, int64, error) {
 			if userID != 12 {
 				t.Fatalf("expected user id 12, got %d", userID)
 			}
-			return []*models.Order{{Status: models.OrderStatusAwaitingPayment}}, nil
+			return []*models.Order{{Status: models.OrderStatusAwaitingPayment}}, 1, nil
 		},
 	}, &mockOrderPaymentService{})
 
@@ -139,6 +139,9 @@ func TestOrderHandlerFindOrder(t *testing.T) {
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", recorder.Code)
+	}
+	if recorder.Header().Get("X-Total-Count") != "1" {
+		t.Fatalf("expected X-Total-Count header of 1, got %q", recorder.Header().Get("X-Total-Count"))
 	}
 }
 

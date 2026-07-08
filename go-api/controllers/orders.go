@@ -32,13 +32,15 @@ func (h *OrderHandler) FindOrder(c *gin.Context) {
 		return
 	}
 
-	orders, err := h.orderService.GetOrdersForUser(ctx, userID)
+	limit, offset := paginationParams(c)
+	orders, total, err := h.orderService.GetOrdersForUser(ctx, userID, services.Pagination{Limit: limit, Offset: offset})
 	if err != nil {
 		logger.Error("Failed to fetch orders for user %d: %v", userID, err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch orders", nil)
 		return
 	}
 
+	setPaginationHeaders(c, total, limit, offset)
 	RespondSuccess(c, http.StatusOK, orders)
 }
 

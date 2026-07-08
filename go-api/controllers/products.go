@@ -35,12 +35,14 @@ func (h *ProductHandler) FindProduct(c *gin.Context) {
 		excludeSellerID = &userID
 	}
 
-	products, err := h.productService.GetAllProducts(ctx, excludeSellerID)
+	limit, offset := paginationParams(c)
+	products, total, err := h.productService.GetAllProducts(ctx, excludeSellerID, services.Pagination{Limit: limit, Offset: offset})
 	if err != nil {
 		logger.Error("Failed to fetch products: %v", err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch products", nil)
 		return
 	}
+	setPaginationHeaders(c, total, limit, offset)
 	RespondSuccess(c, http.StatusOK, products)
 }
 

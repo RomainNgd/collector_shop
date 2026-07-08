@@ -32,8 +32,8 @@ func productPayload() map[string]any {
 func TestProductHandlerFindProduct(t *testing.T) {
 	t.Run("returns 200 on success", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getAllFn: func(_ *uint) ([]*models.Product, error) {
-				return []*models.Product{{Name: "Blue Eyes"}}, nil
+			getAllFn: func(_ *uint, _ services.Pagination) ([]*models.Product, int64, error) {
+				return []*models.Product{{Name: "Blue Eyes"}}, 1, nil
 			},
 		}, &mockCategoryService{}, &mockFileService{})
 
@@ -41,11 +41,16 @@ func TestProductHandlerFindProduct(t *testing.T) {
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", recorder.Code)
 		}
+		if recorder.Header().Get("X-Total-Count") != "1" {
+			t.Fatalf("expected X-Total-Count header of 1, got %q", recorder.Header().Get("X-Total-Count"))
+		}
 	})
 
 	t.Run("returns 500 on error", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getAllFn: func(_ *uint) ([]*models.Product, error) { return nil, errors.New("db error") },
+			getAllFn: func(_ *uint, _ services.Pagination) ([]*models.Product, int64, error) {
+				return nil, 0, errors.New("db error")
+			},
 		}, &mockCategoryService{}, &mockFileService{})
 
 		recorder := performJSONRequest(handler.FindProduct, http.MethodGet, "/products", nil)
@@ -57,9 +62,9 @@ func TestProductHandlerFindProduct(t *testing.T) {
 	t.Run("excludes the authenticated user's own products", func(t *testing.T) {
 		var receivedExclude *uint
 		handler := NewProductHandler(&mockProductService{
-			getAllFn: func(excludeSellerID *uint) ([]*models.Product, error) {
+			getAllFn: func(excludeSellerID *uint, _ services.Pagination) ([]*models.Product, int64, error) {
 				receivedExclude = excludeSellerID
-				return []*models.Product{}, nil
+				return []*models.Product{}, 0, nil
 			},
 		}, &mockCategoryService{}, &mockFileService{})
 
@@ -76,10 +81,10 @@ func TestProductHandlerFindProduct(t *testing.T) {
 		var receivedExclude *uint
 		called := false
 		handler := NewProductHandler(&mockProductService{
-			getAllFn: func(excludeSellerID *uint) ([]*models.Product, error) {
+			getAllFn: func(excludeSellerID *uint, _ services.Pagination) ([]*models.Product, int64, error) {
 				called = true
 				receivedExclude = excludeSellerID
-				return []*models.Product{}, nil
+				return []*models.Product{}, 0, nil
 			},
 		}, &mockCategoryService{}, &mockFileService{})
 
@@ -89,6 +94,24 @@ func TestProductHandlerFindProduct(t *testing.T) {
 		}
 		if !called || receivedExclude != nil {
 			t.Fatalf("expected no exclusion for anonymous request, got %v", receivedExclude)
+		}
+	})
+
+	t.Run("forwards limit and offset query params", func(t *testing.T) {
+		var receivedPage services.Pagination
+		handler := NewProductHandler(&mockProductService{
+			getAllFn: func(_ *uint, page services.Pagination) ([]*models.Product, int64, error) {
+				receivedPage = page
+				return []*models.Product{}, 0, nil
+			},
+		}, &mockCategoryService{}, &mockFileService{})
+
+		recorder := performJSONRequest(handler.FindProduct, http.MethodGet, "/products?limit=5&offset=10", nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		if receivedPage.Limit != 5 || receivedPage.Offset != 10 {
+			t.Fatalf("expected limit=5 offset=10, got %+v", receivedPage)
 		}
 	})
 }

@@ -340,15 +340,56 @@ func TestOrderServiceListOrdersForUser(t *testing.T) {
 		t.Fatalf("expected second order creation success, got %v", err)
 	}
 
-	orders, err := service.GetOrdersForUser(context.Background(), user.ID)
+	orders, total, err := service.GetOrdersForUser(context.Background(), user.ID, Pagination{})
 	if err != nil {
 		t.Fatalf("expected list success, got %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("expected total 1, got %d", total)
 	}
 	if len(orders) != 1 {
 		t.Fatalf("expected one order for user, got %d", len(orders))
 	}
 	if orders[0].UserID != user.ID {
 		t.Fatalf("expected user id %d, got %d", user.ID, orders[0].UserID)
+	}
+}
+
+func TestOrderServiceListOrdersForUserPagination(t *testing.T) {
+	tx := openIntegrationTx(t)
+	service := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID)
+
+	for i := 0; i < 3; i++ {
+		if _, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+			{ProductID: product.ID, Quantity: 1},
+		}); err != nil {
+			t.Fatalf("expected order %d creation success, got %v", i, err)
+		}
+	}
+
+	firstPage, total, err := service.GetOrdersForUser(context.Background(), user.ID, Pagination{Limit: 2, Offset: 0})
+	if err != nil {
+		t.Fatalf("expected first page success, got %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("expected total 3, got %d", total)
+	}
+	if len(firstPage) != 2 {
+		t.Fatalf("expected 2 orders on first page, got %d", len(firstPage))
+	}
+
+	secondPage, total, err := service.GetOrdersForUser(context.Background(), user.ID, Pagination{Limit: 2, Offset: 2})
+	if err != nil {
+		t.Fatalf("expected second page success, got %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("expected total 3, got %d", total)
+	}
+	if len(secondPage) != 1 {
+		t.Fatalf("expected 1 order on second page, got %d", len(secondPage))
 	}
 }
 

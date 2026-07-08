@@ -39,7 +39,7 @@ func (m *mockAuthService) Login(_ context.Context, email, password string) (stri
 }
 
 type mockProductService struct {
-	getAllFn           func(excludeSellerID *uint) ([]*models.Product, error)
+	getAllFn           func(excludeSellerID *uint, page services.Pagination) ([]*models.Product, int64, error)
 	getForSellerFn     func(sellerID uint) ([]*models.Product, error)
 	getByIDFn          func(id uint) (*models.Product, error)
 	getForManagementFn func(actorID uint, actorRole string, id uint) (*models.Product, error)
@@ -48,11 +48,11 @@ type mockProductService struct {
 	deleteFn           func(actorID uint, actorRole string, id uint) error
 }
 
-func (m *mockProductService) GetAllProducts(_ context.Context, excludeSellerID *uint) ([]*models.Product, error) {
+func (m *mockProductService) GetAllProducts(_ context.Context, excludeSellerID *uint, page services.Pagination) ([]*models.Product, int64, error) {
 	if m.getAllFn != nil {
-		return m.getAllFn(excludeSellerID)
+		return m.getAllFn(excludeSellerID, page)
 	}
-	return nil, errors.New("unexpected GetAllProducts call")
+	return nil, 0, errors.New("unexpected GetAllProducts call")
 }
 
 func (m *mockProductService) GetProductsForSeller(_ context.Context, sellerID uint) ([]*models.Product, error) {
@@ -185,7 +185,7 @@ func (m *mockPromotionService) DeletePromotion(_ context.Context, id uint) error
 
 type mockOrderService struct {
 	createFn  func(userID uint, items []services.OrderItemInput) (*models.Order, error)
-	listFn    func(userID uint) ([]*models.Order, error)
+	listFn    func(userID uint, page services.Pagination) ([]*models.Order, int64, error)
 	getByIDFn func(actorID, orderID uint, actorRole string) (*models.Order, error)
 	updateFn  func(actorID, orderID uint, actorRole, status string) (*models.Order, error)
 	deleteFn  func(actorID, orderID uint, actorRole string) error
@@ -198,11 +198,11 @@ func (m *mockOrderService) CreateOrder(_ context.Context, userID uint, items []s
 	return nil, errors.New("unexpected CreateOrder call")
 }
 
-func (m *mockOrderService) GetOrdersForUser(_ context.Context, userID uint) ([]*models.Order, error) {
+func (m *mockOrderService) GetOrdersForUser(_ context.Context, userID uint, page services.Pagination) ([]*models.Order, int64, error) {
 	if m.listFn != nil {
-		return m.listFn(userID)
+		return m.listFn(userID, page)
 	}
-	return nil, errors.New("unexpected GetOrdersForUser call")
+	return nil, 0, errors.New("unexpected GetOrdersForUser call")
 }
 
 func (m *mockOrderService) GetOrderByID(_ context.Context, actorID, orderID uint, actorRole string) (*models.Order, error) {
