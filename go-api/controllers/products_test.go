@@ -32,7 +32,7 @@ func productPayload() map[string]any {
 func TestProductHandlerFindProduct(t *testing.T) {
 	t.Run("returns 200 on success", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getAllFn: func() ([]*models.Product, error) {
+			getAllFn: func(_ *uint) ([]*models.Product, error) {
 				return []*models.Product{{Name: "Blue Eyes"}}, nil
 			},
 		}, &mockCategoryService{}, &mockFileService{})
@@ -45,12 +45,50 @@ func TestProductHandlerFindProduct(t *testing.T) {
 
 	t.Run("returns 500 on error", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getAllFn: func() ([]*models.Product, error) { return nil, errors.New("db error") },
+			getAllFn: func(_ *uint) ([]*models.Product, error) { return nil, errors.New("db error") },
 		}, &mockCategoryService{}, &mockFileService{})
 
 		recorder := performJSONRequest(handler.FindProduct, http.MethodGet, "/products", nil)
 		if recorder.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("excludes the authenticated user's own products", func(t *testing.T) {
+		var receivedExclude *uint
+		handler := NewProductHandler(&mockProductService{
+			getAllFn: func(excludeSellerID *uint) ([]*models.Product, error) {
+				receivedExclude = excludeSellerID
+				return []*models.Product{}, nil
+			},
+		}, &mockCategoryService{}, &mockFileService{})
+
+		recorder := performAuthenticatedJSONRequest(handler.FindProduct, http.MethodGet, "/products", nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		if receivedExclude == nil || *receivedExclude != uint(1) {
+			t.Fatalf("expected exclude seller id 1, got %v", receivedExclude)
+		}
+	})
+
+	t.Run("does not exclude anything when unauthenticated", func(t *testing.T) {
+		var receivedExclude *uint
+		called := false
+		handler := NewProductHandler(&mockProductService{
+			getAllFn: func(excludeSellerID *uint) ([]*models.Product, error) {
+				called = true
+				receivedExclude = excludeSellerID
+				return []*models.Product{}, nil
+			},
+		}, &mockCategoryService{}, &mockFileService{})
+
+		recorder := performJSONRequest(handler.FindProduct, http.MethodGet, "/products", nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		if !called || receivedExclude != nil {
+			t.Fatalf("expected no exclusion for anonymous request, got %v", receivedExclude)
 		}
 	})
 }

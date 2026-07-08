@@ -21,6 +21,7 @@ var (
 	ErrOrderStatusTransitionNotAllowed = errors.New("order status transition is not allowed")
 	ErrOrderDeletionNotAllowed         = errors.New("order deletion is not allowed")
 	ErrOrderInsufficientStock          = errors.New("order product stock is insufficient")
+	ErrOrderOwnProduct                 = errors.New("cannot order your own product")
 )
 
 type OrderItemInput struct {
@@ -71,6 +72,9 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID uint, items []Ord
 			product, ok := productsByID[item.ProductID]
 			if !ok {
 				return ErrOrderProductNotFound
+			}
+			if product.SellerID != nil && *product.SellerID == userID {
+				return ErrOrderOwnProduct
 			}
 			if product.Stock < item.Quantity {
 				return ErrOrderInsufficientStock

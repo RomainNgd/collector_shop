@@ -96,6 +96,9 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			errors.Is(err, services.ErrOrderInsufficientStock):
 			RespondError(c, http.StatusBadRequest, "ORDER_INVALID", "Invalid order payload", err.Error())
 			return
+		case errors.Is(err, services.ErrOrderOwnProduct):
+			RespondError(c, http.StatusForbidden, "ORDER_OWN_PRODUCT", "You cannot order your own product", nil)
+			return
 		default:
 			logger.Error("Failed to create order for user %d: %v", userID, err)
 			RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create order", nil)

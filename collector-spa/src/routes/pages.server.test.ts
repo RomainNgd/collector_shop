@@ -45,7 +45,8 @@ describe('catalogue pages', () => {
 		await expect(
 			loadProductPage({
 				params: { id: '4' },
-				fetch: fetchReturning(apiResponse(apiProduct))
+				fetch: fetchReturning(apiResponse(apiProduct)),
+				locals: { user: null }
 			} as never)
 		).resolves.toMatchObject({ product: { id: 4 } });
 	});
@@ -60,6 +61,33 @@ describe('catalogue pages', () => {
 		await expect(
 			loadProductPage({ params: { id: '99' }, fetch: fetchReturning(apiResponse(null)) } as never)
 		).rejects.toMatchObject({ status: 404 });
+	});
+
+	it('flags a product as owned by the logged-in seller', async () => {
+		const ownProduct = { ...apiProduct, seller_id: 1 };
+		await expect(
+			loadProductPage({
+				params: { id: '4' },
+				fetch: fetchReturning(apiResponse(ownProduct)),
+				locals: { user }
+			} as never)
+		).resolves.toMatchObject({ isOwnProduct: true });
+
+		await expect(
+			loadProductPage({
+				params: { id: '4' },
+				fetch: fetchReturning(apiResponse(ownProduct)),
+				locals: { user: { id: 2, role: USER_ROLE } }
+			} as never)
+		).resolves.toMatchObject({ isOwnProduct: false });
+
+		await expect(
+			loadProductPage({
+				params: { id: '4' },
+				fetch: fetchReturning(apiResponse(ownProduct)),
+				locals: { user: null }
+			} as never)
+		).resolves.toMatchObject({ isOwnProduct: false });
 	});
 });
 

@@ -30,7 +30,12 @@ func NewProductHandler(productService services.ProductServiceInterface, category
 func (h *ProductHandler) FindProduct(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	products, err := h.productService.GetAllProducts(ctx)
+	var excludeSellerID *uint
+	if userID, err := userIDFromContext(c); err == nil {
+		excludeSellerID = &userID
+	}
+
+	products, err := h.productService.GetAllProducts(ctx, excludeSellerID)
 	if err != nil {
 		logger.Error("Failed to fetch products: %v", err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch products", nil)

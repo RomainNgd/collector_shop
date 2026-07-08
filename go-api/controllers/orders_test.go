@@ -103,6 +103,24 @@ func TestOrderHandlerCreateOrder(t *testing.T) {
 			t.Fatalf("unexpected items: %#v", receivedItems)
 		}
 	})
+
+	t.Run("returns 403 when ordering own product", func(t *testing.T) {
+		handler := NewOrderHandler(&mockOrderService{
+			createFn: func(userID uint, items []services.OrderItemInput) (*models.Order, error) {
+				return nil, services.ErrOrderOwnProduct
+			},
+		}, &mockOrderPaymentService{})
+
+		recorder := performOrderJSONRequest(handler.CreateOrder, http.MethodPost, "/orders", map[string]any{
+			"items": []map[string]any{{"product_id": 4, "quantity": 1}},
+		}, nil, func(c *gin.Context) {
+			c.Set(constants.ContextKeyUserID, float64(8))
+		})
+
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("expected 403, got %d", recorder.Code)
+		}
+	})
 }
 
 func TestOrderHandlerFindOrder(t *testing.T) {

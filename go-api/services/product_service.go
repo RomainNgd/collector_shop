@@ -19,7 +19,7 @@ var (
 )
 
 type ProductServiceInterface interface {
-	GetAllProducts(ctx context.Context) ([]*models.Product, error)
+	GetAllProducts(ctx context.Context, excludeSellerID *uint) ([]*models.Product, error)
 	GetProductsForSeller(ctx context.Context, sellerID uint) ([]*models.Product, error)
 	GetProductByID(ctx context.Context, id uint) (*models.Product, error)
 	CreateProduct(ctx context.Context, product *models.Product) error
@@ -35,18 +35,21 @@ func NewProductService(db *gorm.DB) *ProductService {
 	return &ProductService{db: db}
 }
 
-func (s *ProductService) GetAllProducts(ctx context.Context) ([]*models.Product, error) {
+func (s *ProductService) GetAllProducts(ctx context.Context, excludeSellerID *uint) ([]*models.Product, error) {
 	ctx, cancel := withDBTimeout(ctx)
 	defer cancel()
 
-	var products []*models.Product
-	result := s.db.WithContext(ctx).
+	query := s.db.WithContext(ctx).
 		Preload("Category").
 		Preload("Seller").
-		Where("is_active = ? AND stock > ?", true, 0).
-		Find(&products)
-	if result.Error != nil {
-		return nil, fmt.Errorf("failed to fetch products: %w", result.Error)
+		Where("is_active = ? AND stock > ?", true, 0)
+	if excludeSellerID != nil {
+		query = query.Where("seller_id IS NULL OR seller_id != ?", *excludeSellerID)
+	}
+
+	var products []*models.Product
+	if err := query.Find(&products).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch products: %w", err)
 	}
 
 	return s.prepareProducts(ctx, products)

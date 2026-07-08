@@ -73,7 +73,7 @@ func TestProductServiceCRUDAndPreload(t *testing.T) {
 		t.Fatalf("expected no promotion on get, got effective=%f promotion=%#v", found.EffectivePrice, found.AppliedPromotion)
 	}
 
-	all, err := service.GetAllProducts(context.Background())
+	all, err := service.GetAllProducts(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("expected list success, got %v", err)
 	}
@@ -136,6 +136,36 @@ func TestProductServiceAppliesSellerPromotion(t *testing.T) {
 	}
 	if foundA.AppliedPromotion == nil || foundA.AppliedPromotion.Type != models.PromotionTypePercentage {
 		t.Fatalf("expected seller promotion for product A, got %#v", foundA.AppliedPromotion)
+	}
+}
+
+func TestProductServiceGetAllProductsExcludesOwnSeller(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+	service := NewProductService(tx)
+
+	ownProduct := seedProduct(t, tx, category.ID)
+	otherProduct := seedProduct(t, tx, category.ID)
+
+	all, err := service.GetAllProducts(context.Background(), ownProduct.SellerID)
+	if err != nil {
+		t.Fatalf("expected list success, got %v", err)
+	}
+
+	for _, product := range all {
+		if product.ID == ownProduct.ID {
+			t.Fatalf("expected own product %d to be excluded from catalog", ownProduct.ID)
+		}
+	}
+
+	found := false
+	for _, product := range all {
+		if product.ID == otherProduct.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected other seller's product %d to remain in catalog", otherProduct.ID)
 	}
 }
 

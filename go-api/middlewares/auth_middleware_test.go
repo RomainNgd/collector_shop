@@ -112,6 +112,60 @@ func TestAuthenticate(t *testing.T) {
 	})
 }
 
+func TestOptionalAuthenticate(t *testing.T) {
+	secret := newTestSecret(t)
+	middleware := NewAuthMiddleware(secret)
+
+	t.Run("continues without context when header is missing", func(t *testing.T) {
+		var userID any
+		recorder := performMiddlewareRequest(middleware.OptionalAuthenticate(), "", func(c *gin.Context) {
+			userID, _ = c.Get(constants.ContextKeyUserID)
+		})
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		if userID != nil {
+			t.Fatalf("expected no user id, got %#v", userID)
+		}
+	})
+
+	t.Run("continues without context when token is invalid", func(t *testing.T) {
+		var userID any
+		recorder := performMiddlewareRequest(middleware.OptionalAuthenticate(), "Bearer not-a-token", func(c *gin.Context) {
+			userID, _ = c.Get(constants.ContextKeyUserID)
+		})
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		if userID != nil {
+			t.Fatalf("expected no user id, got %#v", userID)
+		}
+	})
+
+	t.Run("stores user id and role on valid token", func(t *testing.T) {
+		token := signedToken(t, secret, jwt.MapClaims{
+			"sub":  float64(42),
+			"role": constants.RoleUser,
+			"exp":  time.Now().Add(time.Hour).Unix(),
+		})
+		var userID any
+		var role any
+		recorder := performMiddlewareRequest(middleware.OptionalAuthenticate(), "Bearer "+token, func(c *gin.Context) {
+			userID, _ = c.Get(constants.ContextKeyUserID)
+			role, _ = c.Get(constants.ContextKeyUserRole)
+		})
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		if userID != float64(42) {
+			t.Fatalf("unexpected user id: %#v", userID)
+		}
+		if role != constants.RoleUser {
+			t.Fatalf("unexpected role: %#v", role)
+		}
+	})
+}
+
 func TestRequireAdmin(t *testing.T) {
 	middleware := NewAuthMiddleware(newTestSecret(t))
 

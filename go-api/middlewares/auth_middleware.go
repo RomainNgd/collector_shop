@@ -66,6 +66,36 @@ func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 	}
 }
 
+// OptionalAuthenticate populates the user context when a valid bearer token
+// is present, but lets the request through otherwise. Used for public routes
+// (e.g. the product catalog) that need to tailor results for a logged-in user
+// without requiring authentication.
+func (m *AuthMiddleware) OptionalAuthenticate() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenString, ok := extractBearerToken(c.GetHeader("Authorization"))
+		if !ok || tokenString == "" {
+			c.Next()
+			return
+		}
+
+		claims, err := m.parseClaims(tokenString)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		if sub, exists := claims["sub"]; exists {
+			c.Set(constants.ContextKeyUserID, sub)
+		}
+
+		if role, ok := claims["role"].(string); ok {
+			c.Set(constants.ContextKeyUserRole, role)
+		}
+
+		c.Next()
+	}
+}
+
 func extractBearerToken(header string) (string, bool) {
 	header = strings.TrimSpace(header)
 	if header == "" || !strings.HasPrefix(header, "Bearer ") {

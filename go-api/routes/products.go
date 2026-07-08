@@ -9,6 +9,7 @@ import (
 
 func SetupProductRoutes(r *gin.Engine, productHandler *controllers.ProductHandler, authMW *middlewares.AuthMiddleware) {
 	products := r.Group("/products")
+	products.Use(authMW.OptionalAuthenticate())
 	{
 		products.GET("", productHandler.FindProduct)
 		products.GET("/:id", productHandler.FindOneProduct)

@@ -111,6 +111,20 @@ func TestOrderServiceCreateOrderRejectsInsufficientStock(t *testing.T) {
 	}
 }
 
+func TestOrderServiceCreateOrderRejectsOwnProduct(t *testing.T) {
+	tx := openIntegrationTx(t)
+	service := NewOrderService(tx)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID)
+
+	_, err := service.CreateOrder(context.Background(), *product.SellerID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 1},
+	})
+	if !errors.Is(err, ErrOrderOwnProduct) {
+		t.Fatalf("expected ErrOrderOwnProduct, got %v", err)
+	}
+}
+
 func TestOrderServiceCreateOrderRejectsMissingProduct(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewOrderService(tx)

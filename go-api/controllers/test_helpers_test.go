@@ -39,7 +39,7 @@ func (m *mockAuthService) Login(_ context.Context, email, password string) (stri
 }
 
 type mockProductService struct {
-	getAllFn       func() ([]*models.Product, error)
+	getAllFn       func(excludeSellerID *uint) ([]*models.Product, error)
 	getForSellerFn func(sellerID uint) ([]*models.Product, error)
 	getByIDFn      func(id uint) (*models.Product, error)
 	createFn       func(product *models.Product) error
@@ -47,9 +47,9 @@ type mockProductService struct {
 	deleteFn       func(actorID uint, actorRole string, id uint) error
 }
 
-func (m *mockProductService) GetAllProducts(_ context.Context) ([]*models.Product, error) {
+func (m *mockProductService) GetAllProducts(_ context.Context, excludeSellerID *uint) ([]*models.Product, error) {
 	if m.getAllFn != nil {
-		return m.getAllFn()
+		return m.getAllFn(excludeSellerID)
 	}
 	return nil, errors.New("unexpected GetAllProducts call")
 }

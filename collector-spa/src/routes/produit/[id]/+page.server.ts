@@ -2,7 +2,7 @@ import { API_PUBLIC_BASE_URL, buildInternalApiPath, readApiResponse } from '$lib
 import { error } from '@sveltejs/kit';
 import { mapApiProduct, type ApiProduct } from '$lib/types';
 
-export const load = async ({ params, fetch }) => {
+export const load = async ({ params, fetch, locals }) => {
 	const response = await fetch(buildInternalApiPath(`/products/${params.id}`));
 
 	if (!response.ok) {
@@ -16,6 +16,7 @@ export const load = async ({ params, fetch }) => {
 	}
 
 	const product = mapApiProduct(payload.data, API_PUBLIC_BASE_URL);
+	const isOwnProduct = locals.user?.id != null && locals.user.id === product.sellerId;
 
-	return { product };
+	return { product, isOwnProduct };
 };
