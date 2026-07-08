@@ -7,4 +7,5 @@ resources:
   - go-api.yaml
   - collector-spa.yaml
   - collector-spa-hpa.yaml
+  - security-headers-middleware.yaml
   - ingress.yaml
