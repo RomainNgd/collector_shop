@@ -10,6 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// stripeWebhookMaxBodyBytes follows Stripe's own guidance: webhook payloads
+// are small JSON events, so anything past a generous margin is abuse.
+const stripeWebhookMaxBodyBytes = 64 * 1024
+
 type PaymentHandler struct {
 	orderPayments services.OrderPaymentServiceInterface
 }
@@ -19,6 +23,8 @@ func NewPaymentHandler(orderPayments services.OrderPaymentServiceInterface) *Pay
 }
 
 func (h *PaymentHandler) HandleStripeWebhook(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, stripeWebhookMaxBodyBytes)
+
 	payload, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "WEBHOOK_BODY_INVALID", "Invalid webhook payload", nil)

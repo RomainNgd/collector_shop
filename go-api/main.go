@@ -106,8 +106,12 @@ func runServer(cfg *config.Config) error {
 	routes.SetupPaymentRoutes(r, paymentHandler)
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%s", cfg.Server.Port),
-		Handler: r,
+		Addr:              fmt.Sprintf(":%s", cfg.Server.Port),
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", appmetrics.Handler())
