@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Psyche a cheval en acajou</title>
+  <desc id="desc">Illustration de demonstration pour un miroir psyche ancien sur pied.</desc>
+  <defs>
+    <linearGradient id="bg" x1="32" y1="24" x2="288" y2="296" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f0e2ca"/>
+      <stop offset="1" stop-color="#9c6a3d"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="36" fill="url(#bg)"/>
+  <rect x="104" y="40" width="112" height="176" rx="20" fill="#7a4e2c" stroke="#33200f" stroke-width="8"/>
+  <rect x="122" y="58" width="76" height="140" rx="10" fill="#e7f1f8" stroke="#33200f" stroke-width="3"/>
+  <path d="M132 176c14-30 26-46 40-46s30 20 34 46" fill="#cfe6f4" opacity=".6"/>
+  <circle cx="112" cy="70" r="8" fill="#c9973f"/>
+  <circle cx="208" cy="70" r="8" fill="#c9973f"/>
+  <path d="M90 260l24-52M230 260l-24-52" stroke="#33200f" stroke-width="10" stroke-linecap="round"/>
+  <path d="M78 262h44M198 262h44" stroke="#33200f" stroke-width="8" stroke-linecap="round"/>
+</svg>

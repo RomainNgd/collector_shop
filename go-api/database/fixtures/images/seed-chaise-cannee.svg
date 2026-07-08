@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Chaise cannee style Directoire</title>
+  <desc id="desc">Illustration de demonstration pour une chaise ancienne cannee.</desc>
+  <defs>
+    <linearGradient id="bg" x1="32" y1="24" x2="288" y2="296" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2e9d6"/>
+      <stop offset="1" stop-color="#c7a066"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="36" fill="url(#bg)"/>
+  <path d="M112 66h96l-8 76h-80z" fill="#8a5b34" stroke="#33200f" stroke-width="6"/>
+  <path d="M120 82h80M120 96h80M120 110h80M120 124h80" stroke="#5c3320" stroke-width="3" opacity=".6"/>
+  <rect x="104" y="142" width="112" height="64" rx="10" fill="#9c6d3f" stroke="#33200f" stroke-width="6"/>
+  <path d="M118 156h84M118 172h84M118 188h84" stroke="#5c3320" stroke-width="3" opacity=".6"/>
+  <path d="M112 206l-10 78M208 206l10 78M146 206l-4 78M186 206l4 78" stroke="#5c3320" stroke-width="8" stroke-linecap="round"/>
+  <path d="M108 258h116" stroke="#33200f" stroke-width="6"/>
+</svg>

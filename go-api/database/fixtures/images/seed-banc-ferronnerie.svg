@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Banc en fer forge et bois</title>
+  <desc id="desc">Illustration de demonstration pour un banc ancien de jardin.</desc>
+  <defs>
+    <linearGradient id="bg" x1="34" y1="18" x2="286" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e9efe6"/>
+      <stop offset="1" stop-color="#7f9a78"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="36" fill="url(#bg)"/>
+  <path d="M92 100c0-20 16-34 68-34s68 14 68 34v40H92z" fill="none" stroke="#3d5a3a" stroke-width="8"/>
+  <path d="M104 100c14-10 98-10 112 0" fill="none" stroke="#3d5a3a" stroke-width="6"/>
+  <rect x="80" y="150" width="160" height="24" rx="6" fill="#7a5230" stroke="#33200f" stroke-width="5"/>
+  <rect x="80" y="182" width="160" height="20" rx="6" fill="#7a5230" stroke="#33200f" stroke-width="5"/>
+  <path d="M96 202v56M244 202v56M160 150v108" stroke="#3d5a3a" stroke-width="8" stroke-linecap="round"/>
+  <path d="M90 258h60M170 258h60" stroke="#3d5a3a" stroke-width="6"/>
+</svg>

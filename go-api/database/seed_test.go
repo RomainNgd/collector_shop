@@ -22,17 +22,17 @@ func TestLoadDemoFixtures(t *testing.T) {
 		t.Fatalf("expected demo fixtures to load, got %v", err)
 	}
 
-	if len(fixtures.Categories) != 4 {
-		t.Fatalf("expected 4 categories, got %d", len(fixtures.Categories))
+	if len(fixtures.Categories) != 2 {
+		t.Fatalf("expected 2 categories, got %d", len(fixtures.Categories))
 	}
-	if len(fixtures.Products) != 6 {
-		t.Fatalf("expected 6 products, got %d", len(fixtures.Products))
+	if len(fixtures.Products) != 18 {
+		t.Fatalf("expected 18 products, got %d", len(fixtures.Products))
 	}
 	if len(fixtures.Promotions) != 3 {
 		t.Fatalf("expected 3 promotions, got %d", len(fixtures.Promotions))
 	}
-	if len(fixtures.Users) != 3 {
-		t.Fatalf("expected 3 users, got %d", len(fixtures.Users))
+	if len(fixtures.Users) != 5 {
+		t.Fatalf("expected 5 users, got %d", len(fixtures.Users))
 	}
 }
 
@@ -222,7 +222,7 @@ func TestSeedDemoData(t *testing.T) {
 	}
 
 	var accessoryPromotion models.Promotion
-	if err := tx.Preload("Products").Where("name = ?", "Demo - Accessoires malins").First(&accessoryPromotion).Error; err != nil {
+	if err := tx.Preload("Products").Where("name = ?", "Demo - Petits meubles malins").First(&accessoryPromotion).Error; err != nil {
 		t.Fatalf("expected seeded accessory promotion, got %v", err)
 	}
 	if accessoryPromotion.AppliesToAll {
@@ -277,7 +277,7 @@ func TestSeedReportSummary(t *testing.T) {
 	}
 }
 
-func TestDefaultSeedSellerIDReturnsErrorWhenNoUserExists(t *testing.T) {
+func TestSeedSellerIDsByEmailReturnsErrorWhenSellerMissing(t *testing.T) {
 	db := openSeedTestDB(t)
 	tx := db.Begin()
 	if tx.Error != nil {
@@ -295,8 +295,9 @@ func TestDefaultSeedSellerIDReturnsErrorWhenNoUserExists(t *testing.T) {
 		t.Fatalf("failed to clear users: %v", err)
 	}
 
-	if _, err := defaultSeedSellerID(tx); err == nil {
-		t.Fatal("expected error when no seller user exists")
+	fixtures := []demoProductFixture{{Name: "Product", Seller: "missing-seller@example.com"}}
+	if _, err := seedSellerIDsByEmail(tx, fixtures); err == nil {
+		t.Fatal("expected error when seller user does not exist")
 	}
 }
 

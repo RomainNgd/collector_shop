@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Vaisselier provencal en chataignier</title>
+  <desc id="desc">Illustration de demonstration pour un vaisselier ancien provencal.</desc>
+  <defs>
+    <linearGradient id="bg" x1="34" y1="18" x2="286" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f0e4cc"/>
+      <stop offset="1" stop-color="#b3814c"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="36" fill="url(#bg)"/>
+  <rect x="76" y="36" width="168" height="120" rx="8" fill="#8a5b34" stroke="#33200f" stroke-width="6"/>
+  <rect x="90" y="50" width="60" height="92" rx="6" fill="#eef3f6" stroke="#33200f" stroke-width="3"/>
+  <rect x="170" y="50" width="60" height="92" rx="6" fill="#eef3f6" stroke="#33200f" stroke-width="3"/>
+  <circle cx="120" cy="80" r="10" fill="#d98b6a"/>
+  <circle cx="200" cy="80" r="10" fill="#6ba1c9"/>
+  <rect x="66" y="160" width="188" height="98" rx="8" fill="#6f4626" stroke="#33200f" stroke-width="6"/>
+  <rect x="80" y="174" width="72" height="70" rx="6" fill="#8a5b34" stroke="#33200f" stroke-width="3"/>
+  <rect x="168" y="174" width="72" height="70" rx="6" fill="#8a5b34" stroke="#33200f" stroke-width="3"/>
+  <circle cx="116" cy="208" r="5" fill="#e9c88a"/>
+  <circle cx="204" cy="208" r="5" fill="#e9c88a"/>
+  <rect x="76" y="262" width="168" height="10" rx="5" fill="#33200f"/>
+</svg>
