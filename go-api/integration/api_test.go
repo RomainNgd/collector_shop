@@ -108,6 +108,14 @@ func (s *integrationStripeService) GetCheckoutSession(_ context.Context, session
 	}, nil
 }
 
+func (s *integrationStripeService) ExpireCheckoutSession(_ context.Context, sessionID string) (*services.StripeCheckoutSession, error) {
+	return &services.StripeCheckoutSession{
+		ID:            sessionID,
+		Status:        "expired",
+		PaymentStatus: "unpaid",
+	}, nil
+}
+
 func (s *integrationStripeService) ConstructWebhookEvent(_ []byte, _ string) (*services.StripeWebhookEvent, error) {
 	return &services.StripeWebhookEvent{
 		Type: "checkout.session.completed",

@@ -546,8 +546,8 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				handler := NewProductHandler(&mockProductService{
 					getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
-				return &models.Product{}, nil
-			},
+						return &models.Product{}, nil
+					},
 				}, &mockCategoryService{}, &mockFileService{
 					saveFn: func(file *multipart.FileHeader) (string, error) { return "", tc.err },
 				})

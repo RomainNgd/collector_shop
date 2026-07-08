@@ -227,8 +227,9 @@ func (m *mockOrderService) DeleteOrder(_ context.Context, actorID, orderID uint,
 }
 
 type mockOrderPaymentService struct {
-	createCheckoutFn func(actorID, orderID uint, actorRole, successURL, cancelURL string) (*services.OrderCheckoutSessionResult, error)
-	handleWebhookFn  func(payload []byte, signature string) error
+	createCheckoutFn  func(actorID, orderID uint, actorRole, successURL, cancelURL string) (*services.OrderCheckoutSessionResult, error)
+	releaseCheckoutFn func(actorID, orderID uint, actorRole string) error
+	handleWebhookFn   func(payload []byte, signature string) error
 }
 
 func (m *mockOrderPaymentService) CreateStripeCheckoutSession(_ context.Context, actorID, orderID uint, actorRole, successURL, cancelURL string) (*services.OrderCheckoutSessionResult, error) {
@@ -236,6 +237,15 @@ func (m *mockOrderPaymentService) CreateStripeCheckoutSession(_ context.Context,
 		return m.createCheckoutFn(actorID, orderID, actorRole, successURL, cancelURL)
 	}
 	return nil, errors.New("unexpected CreateStripeCheckoutSession call")
+}
+
+func (m *mockOrderPaymentService) ReleaseCheckoutSession(_ context.Context, actorID, orderID uint, actorRole string) error {
+	if m.releaseCheckoutFn != nil {
+		return m.releaseCheckoutFn(actorID, orderID, actorRole)
+	}
+	// Deleting an order always releases its checkout first; default to a
+	// no-op so existing deletion tests keep exercising the delete path.
+	return nil
 }
 
 func (m *mockOrderPaymentService) HandleStripeWebhook(_ context.Context, payload []byte, signature string) error {
