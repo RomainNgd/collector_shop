@@ -61,7 +61,9 @@ func TestPromotionHandlerFindOnePromotion(t *testing.T) {
 
 	t.Run("returns 404 when promotion is missing", func(t *testing.T) {
 		handler := NewPromotionHandler(&mockPromotionService{
-			getByIDFn: func(actorID uint, actorRole string, id uint) (*models.Promotion, error) { return nil, gorm.ErrRecordNotFound },
+			getByIDFn: func(actorID uint, actorRole string, id uint) (*models.Promotion, error) {
+				return nil, gorm.ErrRecordNotFound
+			},
 		})
 		recorder := performAuthenticatedJSONRequest(handler.FindOnePromotion, http.MethodGet, "/promotions/1", nil, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusNotFound {
