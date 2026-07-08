@@ -10,7 +10,6 @@ import (
 	"poc-gin/controllers"
 	"poc-gin/database"
 	"poc-gin/middlewares"
-	"poc-gin/models"
 	"poc-gin/pkg/logger"
 	appmetrics "poc-gin/pkg/metrics"
 	"poc-gin/routes"
@@ -60,7 +59,7 @@ func runServer(cfg *config.Config) error {
 
 	if cfg.Database.AutoMigrate {
 		logger.Info("Running database migrations...")
-		if err := migrateDatabase(db.DB); err != nil {
+		if err := database.Migrate(&cfg.Database); err != nil {
 			return fmt.Errorf("database migration failed: %w", err)
 		}
 		logger.Info("Database migrations completed")
@@ -169,7 +168,7 @@ func runSeed(cfg *config.Config) error {
 	}()
 
 	logger.Info("Running database migrations before seed...")
-	if err := migrateDatabase(db.DB); err != nil {
+	if err := database.Migrate(&cfg.Database); err != nil {
 		return fmt.Errorf("database migration failed: %w", err)
 	}
 
@@ -185,15 +184,4 @@ func runSeed(cfg *config.Config) error {
 	logger.Info("Demo data seeded successfully: %s", report.Summary())
 	logger.Info("Seeded accounts")
 	return nil
-}
-
-func migrateDatabase(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&models.Category{},
-		&models.User{},
-		&models.Product{},
-		&models.Promotion{},
-		&models.Order{},
-		&models.OrderItem{},
-	)
 }
