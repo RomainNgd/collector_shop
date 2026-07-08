@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"poc-gin/models"
+	"poc-gin/pkg/constants"
 	"testing"
 
 	"gorm.io/gorm"
@@ -18,7 +19,7 @@ func TestPromotionServiceCRUD(t *testing.T) {
 
 	service := NewPromotionService(tx)
 
-	created, err := service.CreatePromotion(context.Background(), PromotionInput{
+	created, err := service.CreatePromotion(context.Background(), 1, constants.RoleAdmin, PromotionInput{
 		Name:         "Spring sale",
 		Description:  "Selected products",
 		Type:         models.PromotionTypePercentage,
@@ -37,7 +38,7 @@ func TestPromotionServiceCRUD(t *testing.T) {
 		t.Fatalf("expected sorted unique product ids, got %#v", created.ProductIDs)
 	}
 
-	found, err := service.GetPromotionByID(context.Background(), created.ID)
+	found, err := service.GetPromotionByID(context.Background(), 1, constants.RoleAdmin, created.ID)
 	if err != nil {
 		t.Fatalf("expected get success, got %v", err)
 	}
@@ -45,7 +46,7 @@ func TestPromotionServiceCRUD(t *testing.T) {
 		t.Fatalf("unexpected promotion after get: %#v", found)
 	}
 
-	all, err := service.GetAllPromotions(context.Background())
+	all, err := service.GetAllPromotions(context.Background(), 1, constants.RoleAdmin)
 	if err != nil {
 		t.Fatalf("expected list success, got %v", err)
 	}
@@ -53,7 +54,7 @@ func TestPromotionServiceCRUD(t *testing.T) {
 		t.Fatal("expected at least one promotion")
 	}
 
-	updated, err := service.UpdatePromotion(context.Background(), created.ID, PromotionInput{
+	updated, err := service.UpdatePromotion(context.Background(), 1, constants.RoleAdmin, created.ID, PromotionInput{
 		Name:         "Global sale",
 		Description:  "All products",
 		Type:         models.PromotionTypeFixed,
@@ -71,7 +72,7 @@ func TestPromotionServiceCRUD(t *testing.T) {
 		t.Fatalf("unexpected updated promotion: %#v", updated)
 	}
 
-	if err := service.DeletePromotion(context.Background(), created.ID); err != nil {
+	if err := service.DeletePromotion(context.Background(), 1, constants.RoleAdmin, created.ID); err != nil {
 		t.Fatalf("expected delete success, got %v", err)
 	}
 }
@@ -136,7 +137,7 @@ func TestPromotionServiceValidationErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := service.CreatePromotion(context.Background(), tc.input)
+			_, err := service.CreatePromotion(context.Background(), 1, constants.RoleAdmin, tc.input)
 			if !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("expected %v, got %v", tc.expectedErr, err)
 			}
@@ -148,7 +149,7 @@ func TestPromotionServiceUpdateAndDeleteNotFound(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewPromotionService(tx)
 
-	_, err := service.UpdatePromotion(context.Background(), 999999, PromotionInput{
+	_, err := service.UpdatePromotion(context.Background(), 1, constants.RoleAdmin, 999999, PromotionInput{
 		Name:         "Missing",
 		Type:         models.PromotionTypeFixed,
 		Value:        5,
@@ -159,8 +160,123 @@ func TestPromotionServiceUpdateAndDeleteNotFound(t *testing.T) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}
 
-	err = service.DeletePromotion(context.Background(), 999999)
+	err = service.DeletePromotion(context.Background(), 1, constants.RoleAdmin, 999999)
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}
+}
+
+func TestPromotionServiceSellerScoping(t *testing.T) {
+	tx := openIntegrationTx(t)
+	category := seedCategory(t, tx)
+
+	sellerAProduct := seedProduct(t, tx, category.ID)
+	sellerBProduct := seedProduct(t, tx, category.ID)
+	sellerAID := *sellerAProduct.SellerID
+	sellerBID := *sellerBProduct.SellerID
+
+	service := NewPromotionService(tx)
+
+	t.Run("seller cannot create an applies-to-all promotion", func(t *testing.T) {
+		_, err := service.CreatePromotion(context.Background(), sellerAID, constants.RoleUser, PromotionInput{
+			Name:         "Global",
+			Type:         models.PromotionTypeFixed,
+			Value:        5,
+			IsActive:     true,
+			AppliesToAll: true,
+		})
+		if !errors.Is(err, ErrPromotionAppliesAllDenied) {
+			t.Fatalf("expected ErrPromotionAppliesAllDenied, got %v", err)
+		}
+	})
+
+	t.Run("seller cannot target another seller's product", func(t *testing.T) {
+		_, err := service.CreatePromotion(context.Background(), sellerAID, constants.RoleUser, PromotionInput{
+			Name:         "Cross seller",
+			Type:         models.PromotionTypeFixed,
+			Value:        5,
+			IsActive:     true,
+			AppliesToAll: false,
+			ProductIDs:   []uint{sellerBProduct.ID},
+		})
+		if !errors.Is(err, ErrPromotionProductsNotOwned) {
+			t.Fatalf("expected ErrPromotionProductsNotOwned, got %v", err)
+		}
+	})
+
+	sellerAPromotion, err := service.CreatePromotion(context.Background(), sellerAID, constants.RoleUser, PromotionInput{
+		Name:         "Seller A promo",
+		Type:         models.PromotionTypeFixed,
+		Value:        5,
+		IsActive:     true,
+		AppliesToAll: false,
+		ProductIDs:   []uint{sellerAProduct.ID},
+	})
+	if err != nil {
+		t.Fatalf("expected seller to create own promotion, got %v", err)
+	}
+	if sellerAPromotion.SellerID == nil || *sellerAPromotion.SellerID != sellerAID {
+		t.Fatalf("expected promotion seller_id to be set, got %#v", sellerAPromotion.SellerID)
+	}
+
+	t.Run("other seller cannot read it", func(t *testing.T) {
+		_, err := service.GetPromotionByID(context.Background(), sellerBID, constants.RoleUser, sellerAPromotion.ID)
+		if !errors.Is(err, ErrPromotionAccessDenied) {
+			t.Fatalf("expected ErrPromotionAccessDenied, got %v", err)
+		}
+	})
+
+	t.Run("other seller cannot update it", func(t *testing.T) {
+		_, err := service.UpdatePromotion(context.Background(), sellerBID, constants.RoleUser, sellerAPromotion.ID, PromotionInput{
+			Name:         "Hijacked",
+			Type:         models.PromotionTypeFixed,
+			Value:        5,
+			IsActive:     true,
+			AppliesToAll: false,
+			ProductIDs:   []uint{sellerAProduct.ID},
+		})
+		if !errors.Is(err, ErrPromotionAccessDenied) {
+			t.Fatalf("expected ErrPromotionAccessDenied, got %v", err)
+		}
+	})
+
+	t.Run("other seller cannot delete it", func(t *testing.T) {
+		err := service.DeletePromotion(context.Background(), sellerBID, constants.RoleUser, sellerAPromotion.ID)
+		if !errors.Is(err, ErrPromotionAccessDenied) {
+			t.Fatalf("expected ErrPromotionAccessDenied, got %v", err)
+		}
+	})
+
+	t.Run("list is scoped to own promotions", func(t *testing.T) {
+		all, err := service.GetAllPromotions(context.Background(), sellerBID, constants.RoleUser)
+		if err != nil {
+			t.Fatalf("expected list success, got %v", err)
+		}
+		for _, promotion := range all {
+			if promotion.ID == sellerAPromotion.ID {
+				t.Fatalf("seller B should not see seller A's promotion")
+			}
+		}
+	})
+
+	t.Run("owner can update and delete", func(t *testing.T) {
+		updated, err := service.UpdatePromotion(context.Background(), sellerAID, constants.RoleUser, sellerAPromotion.ID, PromotionInput{
+			Name:         "Seller A promo updated",
+			Type:         models.PromotionTypeFixed,
+			Value:        7,
+			IsActive:     true,
+			AppliesToAll: false,
+			ProductIDs:   []uint{sellerAProduct.ID},
+		})
+		if err != nil {
+			t.Fatalf("expected owner update success, got %v", err)
+		}
+		if updated.Name != "Seller A promo updated" {
+			t.Fatalf("unexpected updated promotion: %#v", updated)
+		}
+
+		if err := service.DeletePromotion(context.Background(), sellerAID, constants.RoleUser, sellerAPromotion.ID); err != nil {
+			t.Fatalf("expected owner delete success, got %v", err)
+		}
+	})
 }

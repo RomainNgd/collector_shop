@@ -124,6 +124,51 @@ func TestOrderHandlerFindOrder(t *testing.T) {
 	}
 }
 
+func TestOrderHandlerFindSellerStats(t *testing.T) {
+	t.Run("returns 200 with aggregated stats", func(t *testing.T) {
+		handler := NewOrderHandler(&mockOrderService{
+			sellerStatFn: func(sellerID uint) (*services.SellerStats, error) {
+				if sellerID != 12 {
+					t.Fatalf("expected seller id 12, got %d", sellerID)
+				}
+				return &services.SellerStats{TotalRevenue: 150, TotalSales: 3, ProductCount: 1}, nil
+			},
+		}, &mockOrderPaymentService{})
+
+		recorder := performOrderJSONRequest(handler.FindSellerStats, http.MethodGet, "/seller/stats", nil, nil, func(c *gin.Context) {
+			c.Set(constants.ContextKeyUserID, float64(12))
+		})
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("returns 401 without auth context", func(t *testing.T) {
+		handler := NewOrderHandler(&mockOrderService{}, &mockOrderPaymentService{})
+
+		recorder := performJSONRequest(handler.FindSellerStats, http.MethodGet, "/seller/stats", nil)
+		if recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("returns 500 on service error", func(t *testing.T) {
+		handler := NewOrderHandler(&mockOrderService{
+			sellerStatFn: func(sellerID uint) (*services.SellerStats, error) {
+				return nil, errors.New("db error")
+			},
+		}, &mockOrderPaymentService{})
+
+		recorder := performOrderJSONRequest(handler.FindSellerStats, http.MethodGet, "/seller/stats", nil, nil, func(c *gin.Context) {
+			c.Set(constants.ContextKeyUserID, float64(12))
+		})
+		if recorder.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", recorder.Code)
+		}
+	})
+}
+
 func TestOrderHandlerFindOneOrder(t *testing.T) {
 	t.Run("returns 404 when order is missing", func(t *testing.T) {
 		handler := NewOrderHandler(&mockOrderService{

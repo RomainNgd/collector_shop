@@ -15,6 +15,7 @@ type Promotion struct {
 	Value        float64   `gorm:"not null" json:"value"`
 	IsActive     bool      `gorm:"not null;default:true" json:"is_active"`
 	AppliesToAll bool      `gorm:"not null;default:false" json:"applies_to_all"`
+	SellerID     *uint     `gorm:"index" json:"seller_id,omitempty"`
 	Products     []Product `gorm:"many2many:product_promotions;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 	ProductIDs   []uint    `gorm:"-" json:"product_ids"`
 	ProductCount int       `gorm:"-" json:"product_count"`

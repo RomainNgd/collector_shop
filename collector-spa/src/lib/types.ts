@@ -199,6 +199,18 @@ export interface AuthUser {
 	email?: string;
 }
 
+export interface SellerStats {
+	totalRevenue: number;
+	totalSales: number;
+	productCount: number;
+}
+
+export interface ApiSellerStats {
+	total_revenue: number;
+	total_sales: number;
+	product_count: number;
+}
+
 const PRODUCT_IMAGE_PLACEHOLDER =
 	"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 320'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='32' x2='288' y1='20' y2='300' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23fbfdf9'/%3E%3Cstop offset='1' stop-color='%23e6f3ea'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='320' height='320' rx='32' fill='url(%23g)'/%3E%3Crect x='24' y='24' width='272' height='272' rx='28' fill='none' stroke='%23163329' stroke-opacity='.12'/%3E%3Cpath d='M88 218l44-52c6-7 17-8 24-1l20 20 40-50c7-9 21-10 30-1l26 28v56H88z' fill='%2398d7a9'/%3E%3Ccircle cx='120' cy='110' r='24' fill='%23163329' fill-opacity='.82'/%3E%3C/svg%3E";
 
@@ -300,6 +312,12 @@ export const mapApiProduct = (item: ApiProduct, apiBaseUrl: string): Product => 
 			: 0,
 	isActive: item.is_active ?? true,
 	promotion: mapApiPromotionSummary(item.applied_promotion)
+});
+
+export const mapApiSellerStats = (item: ApiSellerStats): SellerStats => ({
+	totalRevenue: typeof item.total_revenue === 'number' ? item.total_revenue : 0,
+	totalSales: typeof item.total_sales === 'number' ? item.total_sales : 0,
+	productCount: typeof item.product_count === 'number' ? item.product_count : 0
 });
 
 export const mapApiCategory = (item: ApiCategory): Category => ({

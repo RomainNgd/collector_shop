@@ -8,6 +8,7 @@
 
 	let { form }: { form: ActionData } = $props();
 
+	let email = $state(form?.email ?? '');
 	let password = $state('');
 	let confirmPassword = $state('');
 	let clientError = $state<string | null>(null);
@@ -117,7 +118,7 @@
 						type="email"
 						required
 						autocomplete="email"
-						value={form?.email ?? ''}
+						bind:value={email}
 						class="theme-input"
 					/>
 				</div>

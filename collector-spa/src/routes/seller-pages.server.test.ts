@@ -242,10 +242,17 @@ describe('seller pages', () => {
 					'/seller/products': apiResponse([
 						{ ID: 4, name: 'Console', description: 'Retro', price: 10, image: '' }
 					]),
-					'/categories': apiResponse([{ ID: 3, name: 'Consoles' }])
+					'/categories': apiResponse([{ ID: 3, name: 'Consoles' }]),
+					'/promotions': apiResponse([]),
+					'/seller/stats': apiResponse({ total_revenue: 0, total_sales: 0, product_count: 1 })
 				})
 			} as never)
-		).resolves.toMatchObject({ products: [{ id: 4 }], categories: [{ id: 3 }] });
+		).resolves.toMatchObject({
+			products: [{ id: 4 }],
+			categories: [{ id: 3 }],
+			promotions: [],
+			stats: { productCount: 1 }
+		});
 	});
 
 	it('validates and creates a seller product', async () => {
@@ -330,7 +337,7 @@ describe('seller pages', () => {
 				request: requestWithForm('/mes-produits', productForm),
 				fetch: vi.fn(() => Promise.resolve(apiResponse({ ID: 4 })))
 			} as never)
-		).resolves.toMatchObject({ success: 'Produit mis a jour' });
+		).resolves.toMatchObject({ success: 'Produit modifie avec succes' });
 
 		await expect(
 			update({
@@ -369,7 +376,7 @@ describe('seller pages', () => {
 				request: requestWithForm('/mes-produits', { id: '4' }),
 				fetch: vi.fn(() => Promise.resolve(apiResponse({ message: 'ok' })))
 			} as never)
-		).resolves.toMatchObject({ success: 'Produit supprime' });
+		).resolves.toMatchObject({ success: 'Produit supprime avec succes' });
 
 		await expect(
 			deleteAction({

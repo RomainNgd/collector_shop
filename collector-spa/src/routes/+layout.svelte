@@ -69,7 +69,7 @@
 							<a
 								href={resolve('/mes-produits')}
 								class="nav-link"
-								class:active={isActive('/mes-produits')}>Mes produits</a
+								class:active={isActive('/mes-produits')}>Dashboard</a
 							>
 						{/if}
 						<a

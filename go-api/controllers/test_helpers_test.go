@@ -133,54 +133,55 @@ func (m *mockCategoryService) DeleteCategory(_ context.Context, id uint) error {
 }
 
 type mockPromotionService struct {
-	getAllFn  func() ([]*models.Promotion, error)
-	getByIDFn func(id uint) (*models.Promotion, error)
-	createFn  func(input services.PromotionInput) (*models.Promotion, error)
-	updateFn  func(id uint, input services.PromotionInput) (*models.Promotion, error)
-	deleteFn  func(id uint) error
+	getAllFn  func(actorID uint, actorRole string) ([]*models.Promotion, error)
+	getByIDFn func(actorID uint, actorRole string, id uint) (*models.Promotion, error)
+	createFn  func(actorID uint, actorRole string, input services.PromotionInput) (*models.Promotion, error)
+	updateFn  func(actorID uint, actorRole string, id uint, input services.PromotionInput) (*models.Promotion, error)
+	deleteFn  func(actorID uint, actorRole string, id uint) error
 }
 
-func (m *mockPromotionService) GetAllPromotions(_ context.Context) ([]*models.Promotion, error) {
+func (m *mockPromotionService) GetAllPromotions(_ context.Context, actorID uint, actorRole string) ([]*models.Promotion, error) {
 	if m.getAllFn != nil {
-		return m.getAllFn()
+		return m.getAllFn(actorID, actorRole)
 	}
 	return nil, errors.New("unexpected GetAllPromotions call")
 }
 
-func (m *mockPromotionService) GetPromotionByID(_ context.Context, id uint) (*models.Promotion, error) {
+func (m *mockPromotionService) GetPromotionByID(_ context.Context, actorID uint, actorRole string, id uint) (*models.Promotion, error) {
 	if m.getByIDFn != nil {
-		return m.getByIDFn(id)
+		return m.getByIDFn(actorID, actorRole, id)
 	}
 	return nil, errors.New("unexpected GetPromotionByID call")
 }
 
-func (m *mockPromotionService) CreatePromotion(_ context.Context, input services.PromotionInput) (*models.Promotion, error) {
+func (m *mockPromotionService) CreatePromotion(_ context.Context, actorID uint, actorRole string, input services.PromotionInput) (*models.Promotion, error) {
 	if m.createFn != nil {
-		return m.createFn(input)
+		return m.createFn(actorID, actorRole, input)
 	}
 	return nil, errors.New("unexpected CreatePromotion call")
 }
 
-func (m *mockPromotionService) UpdatePromotion(_ context.Context, id uint, input services.PromotionInput) (*models.Promotion, error) {
+func (m *mockPromotionService) UpdatePromotion(_ context.Context, actorID uint, actorRole string, id uint, input services.PromotionInput) (*models.Promotion, error) {
 	if m.updateFn != nil {
-		return m.updateFn(id, input)
+		return m.updateFn(actorID, actorRole, id, input)
 	}
 	return nil, errors.New("unexpected UpdatePromotion call")
 }
 
-func (m *mockPromotionService) DeletePromotion(_ context.Context, id uint) error {
+func (m *mockPromotionService) DeletePromotion(_ context.Context, actorID uint, actorRole string, id uint) error {
 	if m.deleteFn != nil {
-		return m.deleteFn(id)
+		return m.deleteFn(actorID, actorRole, id)
 	}
 	return errors.New("unexpected DeletePromotion call")
 }
 
 type mockOrderService struct {
-	createFn  func(userID uint, items []services.OrderItemInput) (*models.Order, error)
-	listFn    func(userID uint) ([]*models.Order, error)
-	getByIDFn func(actorID, orderID uint, actorRole string) (*models.Order, error)
-	updateFn  func(actorID, orderID uint, actorRole, status string) (*models.Order, error)
-	deleteFn  func(actorID, orderID uint, actorRole string) error
+	createFn     func(userID uint, items []services.OrderItemInput) (*models.Order, error)
+	listFn       func(userID uint) ([]*models.Order, error)
+	getByIDFn    func(actorID, orderID uint, actorRole string) (*models.Order, error)
+	updateFn     func(actorID, orderID uint, actorRole, status string) (*models.Order, error)
+	deleteFn     func(actorID, orderID uint, actorRole string) error
+	sellerStatFn func(sellerID uint) (*services.SellerStats, error)
 }
 
 func (m *mockOrderService) CreateOrder(_ context.Context, userID uint, items []services.OrderItemInput) (*models.Order, error) {
@@ -216,6 +217,13 @@ func (m *mockOrderService) DeleteOrder(_ context.Context, actorID, orderID uint,
 		return m.deleteFn(actorID, orderID, actorRole)
 	}
 	return errors.New("unexpected DeleteOrder call")
+}
+
+func (m *mockOrderService) GetSellerStats(_ context.Context, sellerID uint) (*services.SellerStats, error) {
+	if m.sellerStatFn != nil {
+		return m.sellerStatFn(sellerID)
+	}
+	return nil, errors.New("unexpected GetSellerStats call")
 }
 
 type mockOrderPaymentService struct {
