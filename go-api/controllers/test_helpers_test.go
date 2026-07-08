@@ -39,12 +39,13 @@ func (m *mockAuthService) Login(_ context.Context, email, password string) (stri
 }
 
 type mockProductService struct {
-	getAllFn       func(excludeSellerID *uint) ([]*models.Product, error)
-	getForSellerFn func(sellerID uint) ([]*models.Product, error)
-	getByIDFn      func(id uint) (*models.Product, error)
-	createFn       func(product *models.Product) error
-	updateFn       func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error)
-	deleteFn       func(actorID uint, actorRole string, id uint) error
+	getAllFn           func(excludeSellerID *uint) ([]*models.Product, error)
+	getForSellerFn     func(sellerID uint) ([]*models.Product, error)
+	getByIDFn          func(id uint) (*models.Product, error)
+	getForManagementFn func(actorID uint, actorRole string, id uint) (*models.Product, error)
+	createFn           func(product *models.Product) error
+	updateFn           func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error)
+	deleteFn           func(actorID uint, actorRole string, id uint) error
 }
 
 func (m *mockProductService) GetAllProducts(_ context.Context, excludeSellerID *uint) ([]*models.Product, error) {
@@ -66,6 +67,13 @@ func (m *mockProductService) GetProductByID(_ context.Context, id uint) (*models
 		return m.getByIDFn(id)
 	}
 	return nil, errors.New("unexpected GetProductByID call")
+}
+
+func (m *mockProductService) GetProductForManagement(_ context.Context, actorID uint, actorRole string, id uint) (*models.Product, error) {
+	if m.getForManagementFn != nil {
+		return m.getForManagementFn(actorID, actorRole, id)
+	}
+	return nil, errors.New("unexpected GetProductForManagement call")
 }
 
 func (m *mockProductService) CreateProduct(_ context.Context, product *models.Product) error {

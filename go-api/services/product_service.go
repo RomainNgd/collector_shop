@@ -22,6 +22,7 @@ type ProductServiceInterface interface {
 	GetAllProducts(ctx context.Context, excludeSellerID *uint) ([]*models.Product, error)
 	GetProductsForSeller(ctx context.Context, sellerID uint) ([]*models.Product, error)
 	GetProductByID(ctx context.Context, id uint) (*models.Product, error)
+	GetProductForManagement(ctx context.Context, actorID uint, actorRole string, id uint) (*models.Product, error)
 	CreateProduct(ctx context.Context, product *models.Product) error
 	UpdateProduct(ctx context.Context, actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error)
 	DeleteProduct(ctx context.Context, actorID uint, actorRole string, id uint) error
@@ -85,6 +86,28 @@ func (s *ProductService) GetProductByID(ctx context.Context, id uint) (*models.P
 		First(&product, id)
 	if result.Error != nil {
 		return nil, result.Error
+	}
+
+	if err := s.prepareProduct(ctx, &product); err != nil {
+		return nil, err
+	}
+
+	return &product, nil
+}
+
+// GetProductForManagement fetches a product without the public catalog filters
+// (is_active, stock) and enforces that the actor owns it or is an admin. It is
+// meant for seller/admin management flows such as image upload or removal.
+func (s *ProductService) GetProductForManagement(ctx context.Context, actorID uint, actorRole string, id uint) (*models.Product, error) {
+	ctx, cancel := withDBTimeout(ctx)
+	defer cancel()
+
+	var product models.Product
+	if err := s.db.WithContext(ctx).Preload("Category").Preload("Seller").First(&product, id).Error; err != nil {
+		return nil, err
+	}
+	if !canManageProduct(actorID, actorRole, product.SellerID) {
+		return nil, ErrProductAccessDenied
 	}
 
 	if err := s.prepareProduct(ctx, &product); err != nil {
