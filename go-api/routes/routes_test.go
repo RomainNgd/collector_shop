@@ -13,6 +13,7 @@ func TestRouteRegistration(t *testing.T) {
 	router := gin.New()
 	authMiddleware := middlewares.NewAuthMiddleware("route-test-secret")
 
+	SetupHealthRoutes(router, controllers.NewHealthHandler(nil))
 	SetupAuthRoutes(router, controllers.NewAuthHandler(nil), nil)
 	SetupCategoryRoutes(router, controllers.NewCategoryHandler(nil), authMiddleware)
 	SetupProductRoutes(router, controllers.NewProductHandler(nil, nil, nil), authMiddleware)
@@ -26,6 +27,8 @@ func TestRouteRegistration(t *testing.T) {
 	}
 
 	expected := []string{
+		"GET /healthz",
+		"GET /readyz",
 		"POST /auth/login",
 		"POST /auth/register",
 		"GET /categories",

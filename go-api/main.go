@@ -91,6 +91,7 @@ func runServer(cfg *config.Config) error {
 	authHandler := controllers.NewAuthHandler(authService)
 	orderHandler := controllers.NewOrderHandler(orderService, orderPaymentService)
 	paymentHandler := controllers.NewPaymentHandler(orderPaymentService)
+	healthHandler := controllers.NewHealthHandler(db)
 
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery(), appmetrics.Middleware())
@@ -98,6 +99,7 @@ func runServer(cfg *config.Config) error {
 	// Static files must be registered BEFORE dynamic routes
 	r.Static("/upload", cfg.Upload.Dir)
 
+	routes.SetupHealthRoutes(r, healthHandler)
 	routes.SetupAuthRoutes(r, authHandler, authRateLimiter)
 	routes.SetupCategoryRoutes(r, categoryHandler, authMiddleware)
 	routes.SetupProductRoutes(r, productHandler, authMiddleware)
