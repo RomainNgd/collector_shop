@@ -9,6 +9,7 @@ import {
 	type AuthUser
 } from '$lib/types';
 import { API_PUBLIC_BASE_URL, buildInternalApiPath, readApiResponse } from '$lib/server/api';
+import { redirectToLoginOnAuthFailure } from '$lib/server/auth';
 import { error, redirect } from '@sveltejs/kit';
 
 export const requireAdmin = (user: AuthUser | null) => {
@@ -25,6 +26,7 @@ const loadProducts = async (fetchFn: typeof fetch) => {
 	const response = await fetchFn(buildInternalApiPath('/products'));
 
 	if (!response.ok) {
+		redirectToLoginOnAuthFailure(response);
 		throw error(response.status, 'Impossible de charger les produits');
 	}
 
@@ -41,6 +43,7 @@ const loadCategories = async (fetchFn: typeof fetch) => {
 	const response = await fetchFn(buildInternalApiPath('/categories'));
 
 	if (!response.ok) {
+		redirectToLoginOnAuthFailure(response);
 		throw error(response.status, 'Impossible de charger les categories');
 	}
 
@@ -57,6 +60,7 @@ const loadPromotions = async (fetchFn: typeof fetch) => {
 	const response = await fetchFn(buildInternalApiPath('/promotions'));
 
 	if (!response.ok) {
+		redirectToLoginOnAuthFailure(response);
 		throw error(response.status, 'Impossible de charger les promotions');
 	}
 

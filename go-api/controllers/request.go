@@ -10,6 +10,14 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 type CreateProductRequest struct {
 	Name            string  `json:"name" binding:"required,min=2,max=120"`
 	Description     string  `json:"description" binding:"required,min=2,max=1000"`

@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { API_BASE_URL, API_INTERNAL_PREFIX } from '$lib/server/api';
+import { attemptRefresh, clearAuthCookies, AUTH_TOKEN_COOKIE } from '$lib/server/auth';
 import { claimsToUser, verifyJwtPayload } from '$lib/server/jwt';
 import type { Handle, HandleFetch } from '@sveltejs/kit';
 
@@ -16,23 +17,28 @@ const joinApiUrl = (pathname: string, search: string) => {
 };
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const token = event.cookies.get('auth_token');
+	const jwtSecret = env.JWT_SECRET ?? '';
+	const token = event.cookies.get(AUTH_TOKEN_COOKIE);
 
-	if (!token) {
-		event.locals.user = null;
-		return resolve(event);
-	}
-
-	const claims = verifyJwtPayload(token, env.JWT_SECRET ?? '');
+	const claims = token ? verifyJwtPayload(token, jwtSecret) : null;
 	const user = claims ? claimsToUser(claims) : null;
 
-	if (!user) {
-		event.cookies.delete('auth_token', { path: '/' });
-		event.locals.user = null;
+	if (user) {
+		event.locals.user = user;
 		return resolve(event);
 	}
 
-	event.locals.user = user;
+	// Access token missing/invalid/expired: attempt a transparent refresh
+	// before falling back to a logged-out state, so a short-lived access
+	// token doesn't force a visible re-login on every page load.
+	const refreshedUser = await attemptRefresh(event.cookies, event.url, event.fetch, jwtSecret);
+	if (refreshedUser) {
+		event.locals.user = refreshedUser;
+		return resolve(event);
+	}
+
+	clearAuthCookies(event.cookies);
+	event.locals.user = null;
 	return resolve(event);
 };
 

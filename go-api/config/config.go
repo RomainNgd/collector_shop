@@ -38,7 +38,9 @@ type DatabaseConfig struct {
 }
 
 type JWTConfig struct {
-	Secret string
+	Secret                  string
+	AccessExpirationMinutes int
+	RefreshExpirationDays   int
 }
 
 type UploadConfig struct {
@@ -72,7 +74,9 @@ func Load() (*Config, error) {
 			AutoMigrate: getEnv("DB_AUTO_MIGRATE", "false") == "true",
 		},
 		JWT: JWTConfig{
-			Secret: getEnv("JWT_SECRET", ""),
+			Secret:                  getEnv("JWT_SECRET", ""),
+			AccessExpirationMinutes: getEnvAsInt("JWT_ACCESS_EXPIRATION_MINUTES", 15),
+			RefreshExpirationDays:   getEnvAsInt("JWT_REFRESH_EXPIRATION_DAYS", 30),
 		},
 		Upload: UploadConfig{
 			Dir:         getEnv("UPLOAD_DIR", "./upload"),

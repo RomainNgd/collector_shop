@@ -104,8 +104,8 @@ func TestAuthHandlerLogin(t *testing.T) {
 
 	t.Run("returns 401 for invalid credentials", func(t *testing.T) {
 		handler := NewAuthHandler(&mockAuthService{
-			loginFn: func(email, password string) (string, error) {
-				return "", services.ErrInvalidCredentials
+			loginFn: func(email, password string) (string, string, error) {
+				return "", "", services.ErrInvalidCredentials
 			},
 		})
 
@@ -125,8 +125,8 @@ func TestAuthHandlerLogin(t *testing.T) {
 
 	t.Run("returns 500 on internal error", func(t *testing.T) {
 		handler := NewAuthHandler(&mockAuthService{
-			loginFn: func(email, password string) (string, error) {
-				return "", errors.New("jwt failure")
+			loginFn: func(email, password string) (string, string, error) {
+				return "", "", errors.New("jwt failure")
 			},
 		})
 
@@ -142,8 +142,8 @@ func TestAuthHandlerLogin(t *testing.T) {
 
 	t.Run("returns 200 with token on success", func(t *testing.T) {
 		handler := NewAuthHandler(&mockAuthService{
-			loginFn: func(email, password string) (string, error) {
-				return "signed-token", nil
+			loginFn: func(email, password string) (string, string, error) {
+				return "signed-token", "signed-refresh-token", nil
 			},
 		})
 
@@ -162,6 +162,144 @@ func TestAuthHandlerLogin(t *testing.T) {
 		}
 		if data["token"] != "signed-token" {
 			t.Fatalf("unexpected token: %#v", data["token"])
+		}
+		if data["refresh_token"] != "signed-refresh-token" {
+			t.Fatalf("unexpected refresh_token: %#v", data["refresh_token"])
+		}
+	})
+}
+
+func TestAuthHandlerRefresh(t *testing.T) {
+	t.Run("returns 400 for invalid payload", func(t *testing.T) {
+		handler := NewAuthHandler(&mockAuthService{})
+
+		recorder := performJSONRequest(handler.Refresh, http.MethodPost, "/auth/refresh", map[string]any{})
+
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("returns 401 for invalid refresh token", func(t *testing.T) {
+		handler := NewAuthHandler(&mockAuthService{
+			refreshFn: func(refreshToken string) (string, string, error) {
+				return "", "", services.ErrInvalidRefreshToken
+			},
+		})
+
+		recorder := performJSONRequest(handler.Refresh, http.MethodPost, "/auth/refresh", map[string]any{
+			"refresh_token": "bad-token",
+		})
+
+		resp := decodeAPIResponse(recorder, t)
+		if recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", recorder.Code)
+		}
+		if resp.Error == nil || resp.Error.Code != "REFRESH_TOKEN_INVALID" {
+			t.Fatalf("unexpected error response: %+v", resp.Error)
+		}
+	})
+
+	t.Run("returns 401 for reused refresh token", func(t *testing.T) {
+		handler := NewAuthHandler(&mockAuthService{
+			refreshFn: func(refreshToken string) (string, string, error) {
+				return "", "", services.ErrRefreshTokenReused
+			},
+		})
+
+		recorder := performJSONRequest(handler.Refresh, http.MethodPost, "/auth/refresh", map[string]any{
+			"refresh_token": "reused-token",
+		})
+
+		if recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("returns 500 on internal error", func(t *testing.T) {
+		handler := NewAuthHandler(&mockAuthService{
+			refreshFn: func(refreshToken string) (string, string, error) {
+				return "", "", errors.New("db failure")
+			},
+		})
+
+		recorder := performJSONRequest(handler.Refresh, http.MethodPost, "/auth/refresh", map[string]any{
+			"refresh_token": "some-token",
+		})
+
+		if recorder.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("returns 200 with rotated tokens on success", func(t *testing.T) {
+		handler := NewAuthHandler(&mockAuthService{
+			refreshFn: func(refreshToken string) (string, string, error) {
+				return "new-token", "new-refresh-token", nil
+			},
+		})
+
+		recorder := performJSONRequest(handler.Refresh, http.MethodPost, "/auth/refresh", map[string]any{
+			"refresh_token": "old-token",
+		})
+
+		resp := decodeAPIResponse(recorder, t)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		data, ok := resp.Data.(map[string]any)
+		if !ok {
+			t.Fatalf("expected object data, got %#v", resp.Data)
+		}
+		if data["token"] != "new-token" {
+			t.Fatalf("unexpected token: %#v", data["token"])
+		}
+		if data["refresh_token"] != "new-refresh-token" {
+			t.Fatalf("unexpected refresh_token: %#v", data["refresh_token"])
+		}
+	})
+}
+
+func TestAuthHandlerLogout(t *testing.T) {
+	t.Run("returns 400 for invalid payload", func(t *testing.T) {
+		handler := NewAuthHandler(&mockAuthService{})
+
+		recorder := performJSONRequest(handler.Logout, http.MethodPost, "/auth/logout", map[string]any{})
+
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("returns 200 even for unknown token", func(t *testing.T) {
+		handler := NewAuthHandler(&mockAuthService{
+			logoutFn: func(refreshToken string) error {
+				return nil
+			},
+		})
+
+		recorder := performJSONRequest(handler.Logout, http.MethodPost, "/auth/logout", map[string]any{
+			"refresh_token": "unknown-token",
+		})
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("returns 500 on internal error", func(t *testing.T) {
+		handler := NewAuthHandler(&mockAuthService{
+			logoutFn: func(refreshToken string) error {
+				return errors.New("db failure")
+			},
+		})
+
+		recorder := performJSONRequest(handler.Logout, http.MethodPost, "/auth/logout", map[string]any{
+			"refresh_token": "some-token",
+		})
+
+		if recorder.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", recorder.Code)
 		}
 	})
 }

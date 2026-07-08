@@ -1,4 +1,5 @@
 import { API_PUBLIC_BASE_URL, buildInternalApiPath, readApiResponse } from '$lib/server/api';
+import { redirectToLoginOnAuthFailure } from '$lib/server/auth';
 import { mapApiOrder, type ApiOrder, type Order } from '$lib/types';
 import { error } from '@sveltejs/kit';
 
@@ -6,6 +7,7 @@ export const loadOrders = async (fetchFn: typeof fetch): Promise<Order[]> => {
 	const response = await fetchFn(buildInternalApiPath('/orders'));
 
 	if (!response.ok) {
+		redirectToLoginOnAuthFailure(response);
 		throw error(response.status, 'Impossible de charger les commandes');
 	}
 
@@ -26,6 +28,7 @@ export const loadOrderById = async (fetchFn: typeof fetch, orderId: string): Pro
 	}
 
 	if (!response.ok) {
+		redirectToLoginOnAuthFailure(response);
 		throw error(response.status, 'Impossible de charger la commande');
 	}
 

@@ -44,6 +44,7 @@ func openIntegrationDB(t *testing.T) *gorm.DB {
 		&models.Promotion{},
 		&models.Order{},
 		&models.OrderItem{},
+		&models.RefreshToken{},
 	); err != nil {
 		t.Fatalf("failed to migrate test schema: %v", err)
 	}

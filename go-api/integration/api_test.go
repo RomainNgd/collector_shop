@@ -63,6 +63,7 @@ func openIntegrationTx(t *testing.T) *gorm.DB {
 		&models.Promotion{},
 		&models.Order{},
 		&models.OrderItem{},
+		&models.RefreshToken{},
 	); err != nil {
 		t.Fatalf("failed to migrate test schema: %v", err)
 	}
@@ -144,7 +145,7 @@ func buildRouter(t *testing.T, tx *gorm.DB, secret string) *gin.Engine {
 	categoryService := services.NewCategoryService(tx)
 	productService := services.NewProductService(tx)
 	promotionService := services.NewPromotionService(tx)
-	authService := services.NewAuthService(tx, secret)
+	authService := services.NewAuthService(tx, secret, 15*time.Minute, 30*24*time.Hour)
 	orderService := services.NewOrderService(tx)
 	orderPaymentService := services.NewOrderPaymentService(tx, &integrationStripeService{}, orderService)
 	authMiddleware := middlewares.NewAuthMiddleware(secret)

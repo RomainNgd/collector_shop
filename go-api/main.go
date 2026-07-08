@@ -73,7 +73,12 @@ func runServer(cfg *config.Config) error {
 	categoryService := services.NewCategoryService(db.DB)
 	productService := services.NewProductService(db.DB)
 	promotionService := services.NewPromotionService(db.DB)
-	authService := services.NewAuthService(db.DB, cfg.JWT.Secret)
+	authService := services.NewAuthService(
+		db.DB,
+		cfg.JWT.Secret,
+		time.Duration(cfg.JWT.AccessExpirationMinutes)*time.Minute,
+		time.Duration(cfg.JWT.RefreshExpirationDays)*24*time.Hour,
+	)
 	orderService := services.NewOrderService(db.DB)
 	stripeService := services.NewStripeService(&cfg.Stripe)
 	orderPaymentService := services.NewOrderPaymentService(db.DB, stripeService, orderService, cfg.Stripe.CheckoutAllowedOrigins)

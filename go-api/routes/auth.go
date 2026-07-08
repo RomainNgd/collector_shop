@@ -15,5 +15,7 @@ func SetupAuthRoutes(r *gin.Engine, authHandler *controllers.AuthHandler, rateLi
 	{
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/register", authHandler.Register)
+		auth.POST("/refresh", authHandler.Refresh)
+		auth.POST("/logout", authHandler.Logout)
 	}
 }

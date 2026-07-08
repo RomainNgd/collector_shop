@@ -4,6 +4,7 @@ import {
 	getApiErrorMessage,
 	readApiResponse
 } from '$lib/server/api';
+import { setAuthCookies } from '$lib/server/auth';
 import { claimsToUser, decodeJwtPayload } from '$lib/server/jwt';
 import { getFormString } from '$lib/server/forms';
 import { ADMIN_ROLE } from '$lib/types';
@@ -14,13 +15,14 @@ type LoginApiResponse = {
 	success?: boolean;
 	data?: {
 		token?: string;
+		refresh_token?: string;
 	};
 	error?: {
 		message?: string;
 	};
 };
 
-export const load: PageServerLoad = ({ locals, cookies }) => {
+export const load: PageServerLoad = ({ locals, cookies, url }) => {
 	if (locals.user) {
 		redirect(303, '/');
 	}
@@ -32,7 +34,8 @@ export const load: PageServerLoad = ({ locals, cookies }) => {
 
 	return {
 		registered: registeredEmail.length > 0,
-		registeredEmail
+		registeredEmail,
+		sessionExpired: url.searchParams.get('reason') === 'session_expired'
 	};
 };
 
@@ -57,8 +60,9 @@ export const actions: Actions = {
 
 		const result = await readApiResponse<LoginApiResponse['data']>(response);
 		const token = result.payload?.data?.token;
+		const refreshToken = result.payload?.data?.refresh_token;
 
-		if (!response.ok || result.payload?.success !== true || !token) {
+		if (!response.ok || result.payload?.success !== true || !token || !refreshToken) {
 			return fail(401, {
 				error:
 					getApiErrorMessage(response, result, 'Identifiants invalides') ??
@@ -76,13 +80,7 @@ export const actions: Actions = {
 			});
 		}
 
-		cookies.set('auth_token', token, {
-			path: '/',
-			httpOnly: true,
-			sameSite: 'lax',
-			secure: url.protocol === 'https:',
-			maxAge: 60 * 60 * 24
-		});
+		setAuthCookies(cookies, url, token, refreshToken);
 
 		if (user.role === ADMIN_ROLE) {
 			redirect(303, '/administration');

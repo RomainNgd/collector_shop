@@ -21,7 +21,9 @@ func init() {
 
 type mockAuthService struct {
 	registerFn func(email, password string) (*models.User, error)
-	loginFn    func(email, password string) (string, error)
+	loginFn    func(email, password string) (string, string, error)
+	refreshFn  func(refreshToken string) (string, string, error)
+	logoutFn   func(refreshToken string) error
 }
 
 func (m *mockAuthService) Register(_ context.Context, email, password string) (*models.User, error) {
@@ -31,11 +33,25 @@ func (m *mockAuthService) Register(_ context.Context, email, password string) (*
 	return nil, errors.New("unexpected Register call")
 }
 
-func (m *mockAuthService) Login(_ context.Context, email, password string) (string, error) {
+func (m *mockAuthService) Login(_ context.Context, email, password string) (string, string, error) {
 	if m.loginFn != nil {
 		return m.loginFn(email, password)
 	}
-	return "", errors.New("unexpected Login call")
+	return "", "", errors.New("unexpected Login call")
+}
+
+func (m *mockAuthService) RefreshAccessToken(_ context.Context, refreshToken string) (string, string, error) {
+	if m.refreshFn != nil {
+		return m.refreshFn(refreshToken)
+	}
+	return "", "", errors.New("unexpected RefreshAccessToken call")
+}
+
+func (m *mockAuthService) Logout(_ context.Context, refreshToken string) error {
+	if m.logoutFn != nil {
+		return m.logoutFn(refreshToken)
+	}
+	return errors.New("unexpected Logout call")
 }
 
 type mockProductService struct {

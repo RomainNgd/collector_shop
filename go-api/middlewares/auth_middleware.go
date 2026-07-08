@@ -22,6 +22,13 @@ func NewAuthMiddleware(jwtSecret string) *AuthMiddleware {
 	return &AuthMiddleware{jwtSecret: jwtSecret}
 }
 
+// Authenticate does not check refresh-token revocation against the database
+// on every request: access tokens are short-lived and stateless by design,
+// and revocation is enforced at the refresh boundary (see AuthService.
+// RefreshAccessToken/Logout) instead. A revoked session can therefore still
+// use its current access token for at most its remaining lifetime — a
+// deliberate, bounded trade-off in exchange for keeping every authenticated
+// request O(1) and DB-free.
 func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString, ok := extractBearerToken(c.GetHeader("Authorization"))
