@@ -242,6 +242,17 @@ func (m *mockOrderService) DeleteOrder(_ context.Context, actorID, orderID uint,
 	return errors.New("unexpected DeleteOrder call")
 }
 
+type mockProfileService struct {
+	getStatsFn func(userID uint) (*services.ProfileStats, error)
+}
+
+func (m *mockProfileService) GetProfileStats(_ context.Context, userID uint) (*services.ProfileStats, error) {
+	if m.getStatsFn != nil {
+		return m.getStatsFn(userID)
+	}
+	return nil, errors.New("unexpected GetProfileStats call")
+}
+
 type mockOrderPaymentService struct {
 	createCheckoutFn  func(actorID, orderID uint, actorRole, successURL, cancelURL string) (*services.OrderCheckoutSessionResult, error)
 	releaseCheckoutFn func(actorID, orderID uint, actorRole string) error
