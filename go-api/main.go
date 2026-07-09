@@ -80,6 +80,7 @@ func runServer(cfg *config.Config) error {
 		time.Duration(cfg.JWT.RefreshExpirationDays)*24*time.Hour,
 	)
 	orderService := services.NewOrderService(db.DB)
+	profileService := services.NewProfileService(db.DB)
 	stripeService := services.NewStripeService(&cfg.Stripe)
 	orderPaymentService := services.NewOrderPaymentService(db.DB, stripeService, orderService, cfg.Stripe.CheckoutAllowedOrigins)
 
@@ -94,6 +95,7 @@ func runServer(cfg *config.Config) error {
 	promotionHandler := controllers.NewPromotionHandler(promotionService)
 	authHandler := controllers.NewAuthHandler(authService)
 	orderHandler := controllers.NewOrderHandler(orderService, orderPaymentService)
+	profileHandler := controllers.NewProfileHandler(profileService)
 	paymentHandler := controllers.NewPaymentHandler(orderPaymentService)
 	healthHandler := controllers.NewHealthHandler(db)
 
@@ -109,6 +111,7 @@ func runServer(cfg *config.Config) error {
 	routes.SetupProductRoutes(r, productHandler, authMiddleware)
 	routes.SetupPromotionRoutes(r, promotionHandler, authMiddleware)
 	routes.SetupOrderRoutes(r, orderHandler, authMiddleware)
+	routes.SetupProfileRoutes(r, profileHandler, authMiddleware)
 	routes.SetupPaymentRoutes(r, paymentHandler)
 
 	srv := &http.Server{

@@ -19,6 +19,7 @@ func TestRouteRegistration(t *testing.T) {
 	SetupProductRoutes(router, controllers.NewProductHandler(nil, nil, nil), authMiddleware)
 	SetupPromotionRoutes(router, controllers.NewPromotionHandler(nil), authMiddleware)
 	SetupOrderRoutes(router, controllers.NewOrderHandler(nil, nil), authMiddleware)
+	SetupProfileRoutes(router, controllers.NewProfileHandler(nil), authMiddleware)
 	SetupPaymentRoutes(router, controllers.NewPaymentHandler(nil))
 
 	registered := make(map[string]struct{})
@@ -42,6 +43,7 @@ func TestRouteRegistration(t *testing.T) {
 		"GET /orders",
 		"POST /orders/:id/checkout-session",
 		"DELETE /orders/:id",
+		"GET /profile",
 		"POST /payments/stripe/webhook",
 	}
 	for _, route := range expected {

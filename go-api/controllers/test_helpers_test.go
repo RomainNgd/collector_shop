@@ -248,6 +248,16 @@ func (m *mockOrderService) GetSellerStats(_ context.Context, sellerID uint) (*se
 		return m.sellerStatFn(sellerID)
 	}
 	return nil, errors.New("unexpected GetSellerStats call")
+  
+type mockProfileService struct {
+	getStatsFn func(userID uint) (*services.ProfileStats, error)
+}
+
+func (m *mockProfileService) GetProfileStats(_ context.Context, userID uint) (*services.ProfileStats, error) {
+	if m.getStatsFn != nil {
+		return m.getStatsFn(userID)
+	}
+	return nil, errors.New("unexpected GetProfileStats call")
 }
 
 type mockOrderPaymentService struct {
