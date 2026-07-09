@@ -77,10 +77,8 @@
 							class="nav-link"
 							class:active={isActive('/mes-commandes')}>Mes commandes</a
 						>
-						<a
-							href={resolve('/profil')}
-							class="nav-link"
-							class:active={isActive('/profil')}>Profil</a
+						<a href={resolve('/profil')} class="nav-link" class:active={isActive('/profil')}
+							>Profil</a
 						>
 					{/if}
 					{#if data.user?.role === ADMIN_ROLE}
