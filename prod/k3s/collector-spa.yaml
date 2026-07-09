@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: collector-spa
-          image: romain2311/collector-spa:9079867
+          image: romain2311/collector-spa:7ce6198
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
