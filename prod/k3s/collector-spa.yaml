@@ -4,7 +4,6 @@ metadata:
   name: collector-spa
   namespace: collector-shop-prod
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: collector-spa
