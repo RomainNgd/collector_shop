@@ -80,11 +80,29 @@ describe('login page', () => {
 	it('reads and clears the registration success cookie', () => {
 		const cookies = cookieJar();
 		cookies.get.mockReturnValue(' user@test.local ');
-		expect(loginLoad({ locals: { user: null }, cookies } as never)).toEqual({
+		expect(
+			loginLoad({
+				locals: { user: null },
+				cookies,
+				url: new URL('http://localhost/login')
+			} as never)
+		).toEqual({
 			registered: true,
-			registeredEmail: 'user@test.local'
+			registeredEmail: 'user@test.local',
+			sessionExpired: false
 		});
 		expect(cookies.delete).toHaveBeenCalledOnce();
+	});
+
+	it('shows a session-expired message when redirected with that reason', () => {
+		const cookies = cookieJar();
+		expect(
+			loginLoad({
+				locals: { user: null },
+				cookies,
+				url: new URL('http://localhost/login?reason=session_expired')
+			} as never)
+		).toMatchObject({ sessionExpired: true });
 	});
 
 	it('validates credentials and logs in a user', async () => {
@@ -99,11 +117,16 @@ describe('login page', () => {
 		).resolves.toMatchObject({ status: 400 });
 
 		const token = tokenFor({ sub: 4, role: USER_ROLE, exp: Math.floor(Date.now() / 1000) + 60 });
+		const refreshToken = 'refresh-token-value';
 		const cookies = cookieJar();
 		const result = action({
 			request: actionRequest('/login', { email: 'user@test.local', password: 'password1' }),
 			fetch: vi.fn(() =>
-				Promise.resolve(new Response(JSON.stringify({ success: true, data: { token } })))
+				Promise.resolve(
+					new Response(
+						JSON.stringify({ success: true, data: { token, refresh_token: refreshToken } })
+					)
+				)
 			),
 			cookies,
 			url: new URL('https://collector.test/login')
@@ -114,6 +137,11 @@ describe('login page', () => {
 			'auth_token',
 			token,
 			expect.objectContaining({ secure: true })
+		);
+		expect(cookies.set).toHaveBeenCalledWith(
+			'refresh_token',
+			refreshToken,
+			expect.objectContaining({ secure: true, path: '/api/auth' })
 		);
 	});
 });

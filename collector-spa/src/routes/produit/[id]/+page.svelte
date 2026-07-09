@@ -73,14 +73,20 @@
 			</div>
 
 			<div class="mt-8 flex flex-wrap gap-3">
-				<button
-					type="button"
-					onclick={handleAdd}
-					class="theme-button theme-button-primary buy-btn"
-					class:added
-				>
-					{added ? 'Ajoute au panier' : 'Ajouter au panier'}
-				</button>
+				{#if data.isOwnProduct}
+					<a href={resolve('/mes-produits')} class="theme-button theme-button-primary">
+						Gerer mon produit
+					</a>
+				{:else}
+					<button
+						type="button"
+						onclick={handleAdd}
+						class="theme-button theme-button-primary buy-btn"
+						class:added
+					>
+						{added ? 'Ajoute au panier' : 'Ajouter au panier'}
+					</button>
+				{/if}
 				<a href={resolve('/catalogue')} class="theme-button theme-button-secondary">
 					Retour catalogue
 				</a>

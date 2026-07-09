@@ -11,8 +11,9 @@ const (
 	ContextKeyUserID   = "userID"
 	ContextKeyUserRole = "userRole"
 
-	// JWT
-	JWTExpirationHours = 24
+	// JWT (fallback defaults; real values come from JWTConfig, env-driven)
+	JWTAccessExpirationMinutes = 15
+	JWTRefreshExpirationDays   = 30
 
 	// Database
 	DBTimeout = 5 * time.Second

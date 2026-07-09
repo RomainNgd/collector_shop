@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"poc-gin/config"
 	"testing"
 	"time"
 
 	"github.com/stripe/stripe-go/v84"
+	stripewebhook "github.com/stripe/stripe-go/v84/webhook"
 )
 
 type stripeTestBackend struct {
@@ -61,6 +63,9 @@ func TestStripeServiceDisabled(t *testing.T) {
 	}
 	if _, err := service.ConstructWebhookEvent(nil, ""); !errors.Is(err, ErrStripeNotEnabled) {
 		t.Fatalf("expected disabled webhook error, got %v", err)
+	}
+	if _, err := service.ExpireCheckoutSession(context.Background(), "cs_test"); !errors.Is(err, ErrStripeNotEnabled) {
+		t.Fatalf("expected disabled expire error, got %v", err)
 	}
 }
 
@@ -139,6 +144,11 @@ func TestStripeCheckoutSessionCalls(t *testing.T) {
 	if err != nil || loaded.ID != "cs_test" {
 		t.Fatalf("expected checkout lookup success, got %#v, %v", loaded, err)
 	}
+
+	expired, err := service.ExpireCheckoutSession(context.Background(), "cs_test")
+	if err != nil || expired.ID != "cs_test" {
+		t.Fatalf("expected checkout expiration success, got %#v, %v", expired, err)
+	}
 }
 
 func TestStripeCheckoutSessionErrors(t *testing.T) {
@@ -152,9 +162,100 @@ func TestStripeCheckoutSessionErrors(t *testing.T) {
 	if _, err := service.GetCheckoutSession(context.Background(), "cs_test"); err == nil {
 		t.Fatal("expected checkout lookup error")
 	}
+	if _, err := service.ExpireCheckoutSession(context.Background(), "cs_test"); err == nil {
+		t.Fatal("expected checkout expiration error")
+	}
 
 	backend.err = &stripe.Error{Code: stripe.ErrorCodeResourceMissing, Msg: "missing"}
 	if _, err := service.GetCheckoutSession(context.Background(), "missing"); !errors.Is(err, ErrStripeSessionNotFound) {
 		t.Fatalf("expected missing session error, got %v", err)
+	}
+	if _, err := service.ExpireCheckoutSession(context.Background(), "missing"); !errors.Is(err, ErrStripeSessionNotFound) {
+		t.Fatalf("expected missing session error, got %v", err)
+	}
+}
+
+func signedWebhookPayload(t *testing.T, secret string, payload []byte) (string, string) {
+	t.Helper()
+
+	signed := stripewebhook.GenerateTestSignedPayload(&stripewebhook.UnsignedPayload{
+		Payload: payload,
+		Secret:  secret,
+	})
+
+	return string(signed.Payload), signed.Header
+}
+
+func TestConstructWebhookEventIgnoresNonCheckoutEvents(t *testing.T) {
+	const secret = "whsec_test_construct"
+	service := NewStripeService(&config.StripeConfig{
+		Enabled:       true,
+		SecretKey:     "sk_test",
+		WebhookSecret: secret,
+	})
+
+	rawPayload := []byte(fmt.Sprintf(`{
+		"id": "evt_test_charge",
+		"object": "event",
+		"api_version": %q,
+		"type": "charge.succeeded",
+		"data": {"object": {}}
+	}`, stripe.APIVersion))
+
+	payload, signature := signedWebhookPayload(t, secret, rawPayload)
+
+	event, err := service.ConstructWebhookEvent([]byte(payload), signature)
+	if err != nil {
+		t.Fatalf("expected event construction success, got %v", err)
+	}
+	if event.Type != "charge.succeeded" {
+		t.Fatalf("expected charge.succeeded type, got %s", event.Type)
+	}
+	if event.CheckoutSession.ID != "" {
+		t.Fatalf("expected empty checkout session for non-checkout event, got %#v", event.CheckoutSession)
+	}
+}
+
+func TestConstructWebhookEventParsesCheckoutSession(t *testing.T) {
+	const secret = "whsec_test_construct"
+	service := NewStripeService(&config.StripeConfig{
+		Enabled:       true,
+		SecretKey:     "sk_test",
+		WebhookSecret: secret,
+	})
+
+	rawPayload := []byte(fmt.Sprintf(`{
+		"id": "evt_test_checkout",
+		"object": "event",
+		"api_version": %q,
+		"type": "checkout.session.completed",
+		"data": {
+			"object": {
+				"id": "cs_test_webhook",
+				"url": "https://checkout.stripe.test/cs_test_webhook",
+				"status": "complete",
+				"payment_status": "paid",
+				"metadata": {"order_id": "7"}
+			}
+		}
+	}`, stripe.APIVersion))
+
+	payload, signature := signedWebhookPayload(t, secret, rawPayload)
+
+	event, err := service.ConstructWebhookEvent([]byte(payload), signature)
+	if err != nil {
+		t.Fatalf("expected event construction success, got %v", err)
+	}
+	if event.Type != "checkout.session.completed" {
+		t.Fatalf("expected checkout.session.completed type, got %s", event.Type)
+	}
+	if event.CheckoutSession.ID != "cs_test_webhook" {
+		t.Fatalf("expected mapped checkout session, got %#v", event.CheckoutSession)
+	}
+	if event.CheckoutSession.PaymentStatus != "paid" {
+		t.Fatalf("expected paid payment status, got %s", event.CheckoutSession.PaymentStatus)
+	}
+	if event.CheckoutSession.Metadata["order_id"] != "7" {
+		t.Fatalf("expected order metadata, got %#v", event.CheckoutSession.Metadata)
 	}
 }

@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
-  <title id="title">Coffret acrylic premium</title>
-  <desc id="desc">Illustration de demonstration pour une protection acrylique.</desc>
+  <title id="title">Coffre de mariage breton</title>
+  <desc id="desc">Illustration de demonstration pour un coffre ancien sculpte.</desc>
   <defs>
     <linearGradient id="bg" x1="24" y1="28" x2="290" y2="292" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#eef0ff"/>
-      <stop offset="1" stop-color="#9fa8ff"/>
+      <stop offset="0" stop-color="#f2e4cd"/>
+      <stop offset="1" stop-color="#ab7a45"/>
     </linearGradient>
   </defs>
   <rect width="320" height="320" rx="36" fill="url(#bg)"/>
-  <rect x="78" y="56" width="164" height="208" rx="22" fill="#ffffff" fill-opacity=".18" stroke="#f8fbff" stroke-width="6"/>
-  <rect x="92" y="72" width="136" height="176" rx="16" fill="#ffffff" fill-opacity=".22" stroke="#f8fbff" stroke-width="4"/>
-  <rect x="116" y="102" width="88" height="88" rx="12" fill="#2d3463"/>
-  <path d="M128 168l20-30 16 18 28-34 16 46z" fill="#a5d3ff"/>
-  <circle cx="148" cy="124" r="10" fill="#f7cc6f"/>
-  <text x="160" y="224" fill="#2d3463" font-size="22" font-family="Verdana, sans-serif" text-anchor="middle">ACRYLIC</text>
+  <path d="M74 150l24-26h124l24 26z" fill="#8a5b34" stroke="#33200f" stroke-width="6"/>
+  <rect x="70" y="150" width="180" height="100" rx="10" fill="#7a4e2c" stroke="#33200f" stroke-width="6"/>
+  <path d="M92 168h136M92 190h136M92 212h136" stroke="#5c3320" stroke-width="4"/>
+  <circle cx="160" cy="200" r="10" fill="#e9c88a" stroke="#33200f" stroke-width="3"/>
+  <rect x="60" y="250" width="24" height="28" rx="4" fill="#33200f"/>
+  <rect x="236" y="250" width="24" height="28" rx="4" fill="#33200f"/>
 </svg>

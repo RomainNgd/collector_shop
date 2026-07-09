@@ -18,7 +18,15 @@ Dans un terminal PowerShell:
 powershell -ExecutionPolicy Bypass -File .\tests\load\collector-spa\assert-scale-up.ps1
 ```
 
+Ou depuis Linux/macOS:
+
+```sh
+./tests/load/collector-spa/assert-scale-up.sh
+```
+
 Ce script attend qu'un pod supplementaire `collector-spa` devienne `Ready`.
+La version bash accepte les memes reglages via variables d'environnement:
+`NAMESPACE`, `DEPLOYMENT`, `HPA_NAME`, `TIMEOUT_SECONDS`, `POLL_SECONDS`.
 
 ## Lancer le test de charge
 
@@ -39,8 +47,21 @@ k6 run .\tests\load\collector-spa\k6\scale-up.js -e BASE_URL=http://192.168.1.50
 - `BASE_URL`: URL d'entree du front. Defaut `https://collector-app.romainnigond.fr`
 - `PATH_TO_HIT`: chemin HTTP cible. Defaut `/`
 - `HOST_HEADER`: header `Host` optionnel si tu passes par l'IP du noeud
-- `PEAK_VUS`: charge max. Defaut `180`
-- `BATCH_SIZE`: nombre de requetes paralleles par iteration. Defaut `4`
+- `PEAK_VUS`: charge max. Defaut `60`
+- `BATCH_SIZE`: nombre de requetes paralleles par iteration. Defaut `2`
+
+## Conserver les preuves d'une campagne
+
+Pour archiver le resultat d'un tir (preuve pour le plan de remediation et la soutenance):
+
+```sh
+k6 run tests/load/collector-spa/k6/scale-up.js \
+  -e BASE_URL=https://collector-app.romainnigond.fr \
+  --summary-export "k6-summary-$(date +%Y%m%d-%H%M).json"
+```
+
+Completer avec des captures du dashboard Grafana `Collector Shop - Vue rapide`
+(debit, erreurs 5xx, latence p95) prises pendant le tir.
 
 ## Notes
 

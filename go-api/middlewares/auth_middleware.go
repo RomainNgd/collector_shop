@@ -22,6 +22,13 @@ func NewAuthMiddleware(jwtSecret string) *AuthMiddleware {
 	return &AuthMiddleware{jwtSecret: jwtSecret}
 }
 
+// Authenticate does not check refresh-token revocation against the database
+// on every request: access tokens are short-lived and stateless by design,
+// and revocation is enforced at the refresh boundary (see AuthService.
+// RefreshAccessToken/Logout) instead. A revoked session can therefore still
+// use its current access token for at most its remaining lifetime — a
+// deliberate, bounded trade-off in exchange for keeping every authenticated
+// request O(1) and DB-free.
 func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString, ok := extractBearerToken(c.GetHeader("Authorization"))
@@ -57,6 +64,36 @@ func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 		}
 
 		c.Set(constants.ContextKeyUserID, sub)
+
+		if role, ok := claims["role"].(string); ok {
+			c.Set(constants.ContextKeyUserRole, role)
+		}
+
+		c.Next()
+	}
+}
+
+// OptionalAuthenticate populates the user context when a valid bearer token
+// is present, but lets the request through otherwise. Used for public routes
+// (e.g. the product catalog) that need to tailor results for a logged-in user
+// without requiring authentication.
+func (m *AuthMiddleware) OptionalAuthenticate() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenString, ok := extractBearerToken(c.GetHeader("Authorization"))
+		if !ok || tokenString == "" {
+			c.Next()
+			return
+		}
+
+		claims, err := m.parseClaims(tokenString)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		if sub, exists := claims["sub"]; exists {
+			c.Set(constants.ContextKeyUserID, sub)
+		}
 
 		if role, ok := claims["role"].(string); ok {
 			c.Set(constants.ContextKeyUserRole, role)

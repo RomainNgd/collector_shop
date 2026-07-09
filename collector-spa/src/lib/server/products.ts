@@ -1,4 +1,5 @@
 import { API_PUBLIC_BASE_URL, buildInternalApiPath, readApiResponse } from '$lib/server/api';
+import { redirectToLoginOnAuthFailure } from '$lib/server/auth';
 import { mapApiProduct, type ApiProduct, type Product } from '$lib/types';
 import { error } from '@sveltejs/kit';
 
@@ -22,6 +23,7 @@ export const loadSellerProducts = async (fetchFn: typeof fetch): Promise<Product
 	const response = await fetchFn(buildInternalApiPath('/seller/products'));
 
 	if (!response.ok) {
+		redirectToLoginOnAuthFailure(response);
 		throw error(response.status, 'Impossible de charger tes produits');
 	}
 

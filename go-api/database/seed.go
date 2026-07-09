@@ -68,6 +68,7 @@ type demoProductFixture struct {
 	Image       string  `json:"image"`
 	Price       float64 `json:"price"`
 	Category    string  `json:"category"`
+	Seller      string  `json:"seller"`
 }
 
 type demoUserFixture struct {
@@ -164,7 +165,7 @@ func seedUsers(db *gorm.DB, fixtures []demoUserFixture, report *SeedReport) erro
 }
 
 func seedProducts(db *gorm.DB, fixtures []demoProductFixture, categories map[string]*models.Category, report *SeedReport) error {
-	sellerID, err := defaultSeedSellerID(db)
+	sellerIDsByEmail, err := seedSellerIDsByEmail(db, fixtures)
 	if err != nil {
 		return err
 	}
@@ -173,6 +174,11 @@ func seedProducts(db *gorm.DB, fixtures []demoProductFixture, categories map[str
 		category := categories[fixture.Category]
 		if category == nil {
 			return fmt.Errorf("fixture category %q not found for product %q", fixture.Category, fixture.Name)
+		}
+
+		sellerID, exists := sellerIDsByEmail[fixture.Seller]
+		if !exists {
+			return fmt.Errorf("fixture product %q references unresolved seller %q", fixture.Name, fixture.Seller)
 		}
 
 		created, updated, err := upsertProduct(db, fixture, category.ID, sellerID)
@@ -189,15 +195,32 @@ func seedProducts(db *gorm.DB, fixtures []demoProductFixture, categories map[str
 	return nil
 }
 
-func defaultSeedSellerID(db *gorm.DB) (uint, error) {
-	var user models.User
-	if err := db.
-		Where("role = ?", constants.RoleUser).
-		Order("id ASC").
-		First(&user).Error; err != nil {
-		return 0, fmt.Errorf("failed to find default seller for seeded products: %w", err)
+func seedSellerIDsByEmail(db *gorm.DB, fixtures []demoProductFixture) (map[string]uint, error) {
+	emails := make(map[string]struct{}, len(fixtures))
+	for _, fixture := range fixtures {
+		emails[fixture.Seller] = struct{}{}
 	}
-	return user.ID, nil
+
+	emailList := make([]string, 0, len(emails))
+	for email := range emails {
+		emailList = append(emailList, email)
+	}
+
+	var users []models.User
+	if err := db.Where("email IN ?", emailList).Find(&users).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch fixture sellers: %w", err)
+	}
+
+	sellerIDsByEmail := make(map[string]uint, len(users))
+	for _, user := range users {
+		sellerIDsByEmail[user.Email] = user.ID
+	}
+
+	if len(sellerIDsByEmail) != len(emails) {
+		return nil, errors.New("failed to resolve all fixture product sellers")
+	}
+
+	return sellerIDsByEmail, nil
 }
 
 func seedPromotions(db *gorm.DB, fixtures []demoPromotionFixture, productIDs map[string]uint, report *SeedReport) error {
@@ -247,14 +270,18 @@ func validateDemoFixtures(fixtures *demoFixtures) error {
 	if err != nil {
 		return err
 	}
-	productNames, err := validateProductFixtures(fixtures.Products, categoryNames, availableImages)
+	if err := validateUserFixtures(fixtures.Users); err != nil {
+		return err
+	}
+	userEmails := make(map[string]struct{}, len(fixtures.Users))
+	for _, user := range fixtures.Users {
+		userEmails[user.Email] = struct{}{}
+	}
+	productNames, err := validateProductFixtures(fixtures.Products, categoryNames, availableImages, userEmails)
 	if err != nil {
 		return err
 	}
-	if err := validatePromotionFixtures(fixtures.Promotions, productNames); err != nil {
-		return err
-	}
-	return validateUserFixtures(fixtures.Users)
+	return validatePromotionFixtures(fixtures.Promotions, productNames)
 }
 
 func validateFixtureCollections(fixtures *demoFixtures) error {
@@ -313,10 +340,10 @@ func validateCategoryFixture(category demoCategoryFixture, categoryNames map[str
 	return nil
 }
 
-func validateProductFixtures(fixtures []demoProductFixture, categoryNames, availableImages map[string]struct{}) (map[string]struct{}, error) {
+func validateProductFixtures(fixtures []demoProductFixture, categoryNames, availableImages, userEmails map[string]struct{}) (map[string]struct{}, error) {
 	productNames := make(map[string]struct{}, len(fixtures))
 	for _, product := range fixtures {
-		if err := validateProductFixture(product, categoryNames, availableImages, productNames); err != nil {
+		if err := validateProductFixture(product, categoryNames, availableImages, userEmails, productNames); err != nil {
 			return nil, err
 		}
 		productNames[product.Name] = struct{}{}
@@ -324,7 +351,7 @@ func validateProductFixtures(fixtures []demoProductFixture, categoryNames, avail
 	return productNames, nil
 }
 
-func validateProductFixture(product demoProductFixture, categoryNames, availableImages, productNames map[string]struct{}) error {
+func validateProductFixture(product demoProductFixture, categoryNames, availableImages, userEmails, productNames map[string]struct{}) error {
 	if strings.TrimSpace(product.Name) == "" {
 		return errors.New("fixture product name cannot be empty")
 	}
@@ -345,6 +372,12 @@ func validateProductFixture(product demoProductFixture, categoryNames, available
 	}
 	if _, exists := availableImages[product.Image]; !exists {
 		return fmt.Errorf("fixture product %q references missing image %q", product.Name, product.Image)
+	}
+	if strings.TrimSpace(product.Seller) == "" {
+		return fmt.Errorf("fixture product %q must include a seller", product.Name)
+	}
+	if _, exists := userEmails[product.Seller]; !exists {
+		return fmt.Errorf("fixture product %q references unknown seller %q", product.Name, product.Seller)
 	}
 	if _, exists := productNames[product.Name]; exists {
 		return fmt.Errorf("fixture product %q is duplicated", product.Name)

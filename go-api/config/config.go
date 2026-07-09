@@ -10,11 +10,17 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	Upload   UploadConfig
-	Stripe   StripeConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	JWT       JWTConfig
+	Upload    UploadConfig
+	Stripe    StripeConfig
+	RateLimit RateLimitConfig
+}
+
+type RateLimitConfig struct {
+	AuthRequests      int
+	AuthWindowSeconds int
 }
 
 type ServerConfig struct {
@@ -32,7 +38,9 @@ type DatabaseConfig struct {
 }
 
 type JWTConfig struct {
-	Secret string
+	Secret                  string
+	AccessExpirationMinutes int
+	RefreshExpirationDays   int
 }
 
 type UploadConfig struct {
@@ -66,7 +74,9 @@ func Load() (*Config, error) {
 			AutoMigrate: getEnv("DB_AUTO_MIGRATE", "false") == "true",
 		},
 		JWT: JWTConfig{
-			Secret: getEnv("JWT_SECRET", ""),
+			Secret:                  getEnv("JWT_SECRET", ""),
+			AccessExpirationMinutes: getEnvAsInt("JWT_ACCESS_EXPIRATION_MINUTES", 15),
+			RefreshExpirationDays:   getEnvAsInt("JWT_REFRESH_EXPIRATION_DAYS", 30),
 		},
 		Upload: UploadConfig{
 			Dir:         getEnv("UPLOAD_DIR", "./upload"),
@@ -77,6 +87,10 @@ func Load() (*Config, error) {
 			SecretKey:              getEnv("STRIPE_SECRET_KEY", ""),
 			WebhookSecret:          getEnv("STRIPE_WEBHOOK_SECRET", ""),
 			CheckoutAllowedOrigins: getEnvList("STRIPE_CHECKOUT_ALLOWED_ORIGINS"),
+		},
+		RateLimit: RateLimitConfig{
+			AuthRequests:      getEnvAsInt("AUTH_RATE_LIMIT_REQUESTS", 10),
+			AuthWindowSeconds: getEnvAsInt("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60),
 		},
 	}
 
@@ -143,6 +157,14 @@ func getEnv(key, defaultValue string) string {
 func getEnvAsInt64(key string, defaultValue int64) int64 {
 	valueStr := os.Getenv(key)
 	if value, err := strconv.ParseInt(valueStr, 10, 64); err == nil {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	valueStr := os.Getenv(key)
+	if value, err := strconv.Atoi(valueStr); err == nil {
 		return value
 	}
 	return defaultValue

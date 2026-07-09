@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Table de chevet marquetee</title>
+  <desc id="desc">Illustration de demonstration pour une table de chevet ancienne.</desc>
+  <defs>
+    <linearGradient id="bg" x1="32" y1="24" x2="288" y2="296" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f3e6d3"/>
+      <stop offset="1" stop-color="#c9a06a"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="36" fill="url(#bg)"/>
+  <rect x="108" y="90" width="104" height="150" rx="10" fill="#8a5a34" stroke="#3a2213" stroke-width="6"/>
+  <rect x="120" y="104" width="80" height="30" rx="6" fill="#a9764a" stroke="#3a2213" stroke-width="3"/>
+  <rect x="120" y="142" width="80" height="60" rx="6" fill="#6f4626" stroke="#3a2213" stroke-width="3"/>
+  <circle cx="160" cy="119" r="5" fill="#e9c88a"/>
+  <circle cx="160" cy="172" r="5" fill="#e9c88a"/>
+  <path d="M104 240l-6 24h20l2-24zM216 240l6 24h-20l-2-24z" fill="#3a2213"/>
+  <rect x="96" y="264" width="128" height="10" rx="5" fill="#3a2213"/>
+</svg>

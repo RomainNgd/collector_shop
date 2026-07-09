@@ -106,14 +106,17 @@ Si un job obligatoire échoue, la fusion est bloquée. Le développeur corrige l
 
 ## 3. Tests automatisés intégrés
 
-| Type de test | Périmètre | Outil | Moment d'exécution |
-|---|---|---|---|
-| Unitaire | Fonctions, prix, promotions, JWT et validations | Go test, Vitest | À chaque pull request |
-| Intégration | Contrôleurs, services, middleware et base de données | Go test | À chaque pull request |
-| Sécurité | Authentification, autorisations, webhook et entrées invalides | Go test, SonarCloud, Trivy | À chaque pull request |
-| E2E | Parcours utilisateur complets | Playwright ou outil équivalent | En environnement de validation |
-| Performance | Latence, erreurs et capacité | k6 | Avant une livraison sensible |
-| Déploiement | Démarrage, probes et montée en charge | Kubernetes, script PowerShell | Après déploiement de validation |
+| Type de test | Périmètre | Outil | Moment d'exécution | Parties prenantes |
+|---|---|---|---|---|
+| Unitaire | Fonctions, prix, promotions, JWT et validations | Go test, Vitest | À chaque pull request | Développeurs back et front (écriture), relecteur de la PR |
+| Intégration | Contrôleurs, services, middleware et base de données | Go test | À chaque pull request | Développeur back-end, testeur QA |
+| Acceptation | Critères d'acceptation du backlog (US-01 à US-07) | Go test (intégration), démonstration | À chaque pull request et en revue de sprint | Testeur QA, Product Owner (validation des critères) |
+| Sécurité | Authentification, autorisations, webhook et entrées invalides | Go test, SonarCloud, Trivy | À chaque pull request | Développeurs, DevSecOps (analyse des rapports) |
+| E2E | Parcours utilisateur complets | Playwright ou outil équivalent | En environnement de validation | Testeur QA, développeur front-end |
+| Performance | Latence, erreurs et capacité | k6 | Avant une livraison sensible | DevOps (exécution), lead developer (analyse et arbitrage) |
+| Déploiement | Démarrage, probes et montée en charge | Kubernetes, scripts PowerShell/bash | Après déploiement de validation | DevOps |
+
+Le lead developer est responsable de la politique de tests dans son ensemble : il arbitre les seuils, valide les exceptions et vérifie que chaque type de test reste exécuté au moment prévu.
 
 ## 4. Portes de qualité
 

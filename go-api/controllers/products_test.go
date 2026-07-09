@@ -32,8 +32,8 @@ func productPayload() map[string]any {
 func TestProductHandlerFindProduct(t *testing.T) {
 	t.Run("returns 200 on success", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getAllFn: func() ([]*models.Product, error) {
-				return []*models.Product{{Name: "Blue Eyes"}}, nil
+			getAllFn: func(_ *uint, _ services.Pagination) ([]*models.Product, int64, error) {
+				return []*models.Product{{Name: "Blue Eyes"}}, 1, nil
 			},
 		}, &mockCategoryService{}, &mockFileService{})
 
@@ -41,16 +41,77 @@ func TestProductHandlerFindProduct(t *testing.T) {
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", recorder.Code)
 		}
+		if recorder.Header().Get("X-Total-Count") != "1" {
+			t.Fatalf("expected X-Total-Count header of 1, got %q", recorder.Header().Get("X-Total-Count"))
+		}
 	})
 
 	t.Run("returns 500 on error", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getAllFn: func() ([]*models.Product, error) { return nil, errors.New("db error") },
+			getAllFn: func(_ *uint, _ services.Pagination) ([]*models.Product, int64, error) {
+				return nil, 0, errors.New("db error")
+			},
 		}, &mockCategoryService{}, &mockFileService{})
 
 		recorder := performJSONRequest(handler.FindProduct, http.MethodGet, "/products", nil)
 		if recorder.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("excludes the authenticated user's own products", func(t *testing.T) {
+		var receivedExclude *uint
+		handler := NewProductHandler(&mockProductService{
+			getAllFn: func(excludeSellerID *uint, _ services.Pagination) ([]*models.Product, int64, error) {
+				receivedExclude = excludeSellerID
+				return []*models.Product{}, 0, nil
+			},
+		}, &mockCategoryService{}, &mockFileService{})
+
+		recorder := performAuthenticatedJSONRequest(handler.FindProduct, http.MethodGet, "/products", nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		if receivedExclude == nil || *receivedExclude != uint(1) {
+			t.Fatalf("expected exclude seller id 1, got %v", receivedExclude)
+		}
+	})
+
+	t.Run("does not exclude anything when unauthenticated", func(t *testing.T) {
+		var receivedExclude *uint
+		called := false
+		handler := NewProductHandler(&mockProductService{
+			getAllFn: func(excludeSellerID *uint, _ services.Pagination) ([]*models.Product, int64, error) {
+				called = true
+				receivedExclude = excludeSellerID
+				return []*models.Product{}, 0, nil
+			},
+		}, &mockCategoryService{}, &mockFileService{})
+
+		recorder := performJSONRequest(handler.FindProduct, http.MethodGet, "/products", nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		if !called || receivedExclude != nil {
+			t.Fatalf("expected no exclusion for anonymous request, got %v", receivedExclude)
+		}
+	})
+
+	t.Run("forwards limit and offset query params", func(t *testing.T) {
+		var receivedPage services.Pagination
+		handler := NewProductHandler(&mockProductService{
+			getAllFn: func(_ *uint, page services.Pagination) ([]*models.Product, int64, error) {
+				receivedPage = page
+				return []*models.Product{}, 0, nil
+			},
+		}, &mockCategoryService{}, &mockFileService{})
+
+		recorder := performJSONRequest(handler.FindProduct, http.MethodGet, "/products?limit=5&offset=10", nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
+		}
+		if receivedPage.Limit != 5 || receivedPage.Offset != 10 {
+			t.Fatalf("expected limit=5 offset=10, got %+v", receivedPage)
 		}
 	})
 }
@@ -471,7 +532,9 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 
 	t.Run("returns 404 when product is missing", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) { return nil, gorm.ErrRecordNotFound },
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return nil, gorm.ErrRecordNotFound
+			},
 		}, &mockCategoryService{}, &mockFileService{})
 		req, _ := http.NewRequest(http.MethodPost, "/products/1/image", strings.NewReader(""))
 		recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
@@ -482,7 +545,9 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 
 	t.Run("returns 400 when file is missing", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{}, nil },
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return &models.Product{}, nil
+			},
 		}, &mockCategoryService{}, &mockFileService{})
 		req, _ := http.NewRequest(http.MethodPost, "/products/1/image", strings.NewReader(""))
 		recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
@@ -503,7 +568,9 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				handler := NewProductHandler(&mockProductService{
-					getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{}, nil },
+					getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+						return &models.Product{}, nil
+					},
 				}, &mockCategoryService{}, &mockFileService{
 					saveFn: func(file *multipart.FileHeader) (string, error) { return "", tc.err },
 				})
@@ -518,7 +585,9 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 
 	t.Run("returns 500 when save image fails", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{}, nil },
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return &models.Product{}, nil
+			},
 		}, &mockCategoryService{}, &mockFileService{
 			saveFn: func(file *multipart.FileHeader) (string, error) { return "", errors.New("disk full") },
 		})
@@ -532,7 +601,7 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 	t.Run("deletes previous image and returns 200 on success", func(t *testing.T) {
 		var deletedOld string
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) {
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
 				return &models.Product{Image: "old.png"}, nil
 			},
 			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
@@ -558,7 +627,9 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 	t.Run("deletes newly uploaded image when product update fails", func(t *testing.T) {
 		var deletedNew string
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{}, nil },
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return &models.Product{}, nil
+			},
 			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 				return nil, errors.New("db error")
 			},
@@ -582,7 +653,9 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 	t.Run("deletes newly uploaded image when access is denied", func(t *testing.T) {
 		var deletedNew string
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{}, nil },
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return &models.Product{}, nil
+			},
 			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 				return nil, services.ErrProductAccessDenied
 			},
@@ -600,6 +673,32 @@ func TestProductHandlerUploadProductImage(t *testing.T) {
 		}
 		if deletedNew != "new.png" {
 			t.Fatalf("expected newly uploaded image cleanup, got %q", deletedNew)
+		}
+	})
+
+	t.Run("returns 403 without touching files when actor does not own the product", func(t *testing.T) {
+		var savedFile, deletedFile bool
+		handler := NewProductHandler(&mockProductService{
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return nil, services.ErrProductAccessDenied
+			},
+		}, &mockCategoryService{}, &mockFileService{
+			saveFn: func(file *multipart.FileHeader) (string, error) {
+				savedFile = true
+				return "new.png", nil
+			},
+			deleteFn: func(filename string) error {
+				deletedFile = true
+				return nil
+			},
+		})
+		req := newMultipartImageRequest(t, http.MethodPost, "/products/1/image", "image", "photo.png")
+		recorder := performAuthenticatedMultipartRequest(handler.UploadProductImage, req, gin.Param{Key: "id", Value: "1"})
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("expected 403, got %d", recorder.Code)
+		}
+		if savedFile || deletedFile {
+			t.Fatalf("expected no file operation for denied actor, got save=%v delete=%v", savedFile, deletedFile)
 		}
 	})
 }
@@ -623,7 +722,9 @@ func TestProductHandlerDeleteProductImage(t *testing.T) {
 
 	t.Run("returns 404 when product is missing", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) { return nil, gorm.ErrRecordNotFound },
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return nil, gorm.ErrRecordNotFound
+			},
 		}, &mockCategoryService{}, &mockFileService{})
 		recorder := performAuthenticatedJSONRequest(handler.DeleteProductImage, http.MethodDelete, "/products/1/image", nil, gin.Param{Key: "id", Value: "1"})
 		if recorder.Code != http.StatusNotFound {
@@ -633,7 +734,9 @@ func TestProductHandlerDeleteProductImage(t *testing.T) {
 
 	t.Run("returns 200 and ignores image deletion error", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{Image: "old.png"}, nil },
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return &models.Product{Image: "old.png"}, nil
+			},
 			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 				return &models.Product{Image: ""}, nil
 			},
@@ -648,7 +751,9 @@ func TestProductHandlerDeleteProductImage(t *testing.T) {
 
 	t.Run("returns 403 when access is denied", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{Image: "old.png"}, nil },
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return &models.Product{Image: "old.png"}, nil
+			},
 			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 				return nil, services.ErrProductAccessDenied
 			},
@@ -661,9 +766,32 @@ func TestProductHandlerDeleteProductImage(t *testing.T) {
 		}
 	})
 
+	t.Run("returns 403 without touching files when actor does not own the product", func(t *testing.T) {
+		var deletedFile bool
+		handler := NewProductHandler(&mockProductService{
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return nil, services.ErrProductAccessDenied
+			},
+		}, &mockCategoryService{}, &mockFileService{
+			deleteFn: func(filename string) error {
+				deletedFile = true
+				return nil
+			},
+		})
+		recorder := performAuthenticatedJSONRequest(handler.DeleteProductImage, http.MethodDelete, "/products/1/image", nil, gin.Param{Key: "id", Value: "1"})
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("expected 403, got %d", recorder.Code)
+		}
+		if deletedFile {
+			t.Fatal("expected no file deletion for denied actor")
+		}
+	})
+
 	t.Run("returns 500 when update fails with unmapped error", func(t *testing.T) {
 		handler := NewProductHandler(&mockProductService{
-			getByIDFn: func(id uint) (*models.Product, error) { return &models.Product{Image: "old.png"}, nil },
+			getForManagementFn: func(actorID uint, actorRole string, id uint) (*models.Product, error) {
+				return &models.Product{Image: "old.png"}, nil
+			},
 			updateFn: func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error) {
 				return nil, errors.New("db error")
 			},

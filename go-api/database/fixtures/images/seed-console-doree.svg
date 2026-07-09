@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Console dorée a la feuille d'or</title>
+  <desc id="desc">Illustration de demonstration pour une console ancienne doree.</desc>
+  <defs>
+    <linearGradient id="bg" x1="32" y1="24" x2="288" y2="296" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8eecb"/>
+      <stop offset="1" stop-color="#d1a63f"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="36" fill="url(#bg)"/>
+  <rect x="70" y="120" width="180" height="20" rx="6" fill="#eadfa8" stroke="#5c3f16" stroke-width="5"/>
+  <rect x="86" y="140" width="148" height="12" rx="4" fill="#c99a4c" stroke="#5c3f16" stroke-width="3"/>
+  <path d="M100 152c-6 40-6 70 4 100M220 152c6 40 6 70-4 100" fill="none" stroke="#8a6a2f" stroke-width="8" stroke-linecap="round"/>
+  <path d="M150 152c-2 34 6 60 10 100M170 152c2 34-6 60-10 100" fill="none" stroke="#8a6a2f" stroke-width="8" stroke-linecap="round"/>
+  <path d="M100 200c30-14 90-14 120 0" fill="none" stroke="#8a6a2f" stroke-width="6"/>
+  <rect x="92" y="248" width="136" height="10" rx="5" fill="#5c3f16"/>
+</svg>

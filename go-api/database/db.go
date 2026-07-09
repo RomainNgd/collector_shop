@@ -86,3 +86,12 @@ func (db *Database) Close() error {
 	}
 	return sqlDB.Close()
 }
+
+// Ping verifies the connection is actually usable, for readiness checks.
+func (db *Database) Ping(ctx context.Context) error {
+	sqlDB, err := db.DB.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
+}

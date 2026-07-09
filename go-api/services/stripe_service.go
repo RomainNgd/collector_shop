@@ -57,6 +57,7 @@ type StripeServiceInterface interface {
 	Enabled() bool
 	CreateCheckoutSession(ctx context.Context, input StripeCheckoutSessionInput) (*StripeCheckoutSession, error)
 	GetCheckoutSession(ctx context.Context, sessionID string) (*StripeCheckoutSession, error)
+	ExpireCheckoutSession(ctx context.Context, sessionID string) (*StripeCheckoutSession, error)
 	ConstructWebhookEvent(payload []byte, signature string) (*StripeWebhookEvent, error)
 }
 
@@ -148,6 +149,25 @@ func (s *StripeService) GetCheckoutSession(_ context.Context, sessionID string) 
 			return nil, ErrStripeSessionNotFound
 		}
 		return nil, fmt.Errorf("failed to fetch stripe checkout session: %w", err)
+	}
+
+	return mapStripeCheckoutSession(session), nil
+}
+
+// ExpireCheckoutSession invalidates an open hosted checkout session so it can
+// no longer be paid, e.g. when the underlying order is deleted.
+func (s *StripeService) ExpireCheckoutSession(_ context.Context, sessionID string) (*StripeCheckoutSession, error) {
+	if !s.Enabled() {
+		return nil, ErrStripeNotEnabled
+	}
+
+	stripe.Key = s.secretKey
+	session, err := checkoutsession.Expire(sessionID, nil)
+	if err != nil {
+		if stripeErr, ok := err.(*stripe.Error); ok && stripeErr.Code == stripe.ErrorCodeResourceMissing {
+			return nil, ErrStripeSessionNotFound
+		}
+		return nil, fmt.Errorf("failed to expire stripe checkout session: %w", err)
 	}
 
 	return mapStripeCheckoutSession(session), nil

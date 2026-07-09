@@ -103,15 +103,33 @@ func TestOrderHandlerCreateOrder(t *testing.T) {
 			t.Fatalf("unexpected items: %#v", receivedItems)
 		}
 	})
+
+	t.Run("returns 403 when ordering own product", func(t *testing.T) {
+		handler := NewOrderHandler(&mockOrderService{
+			createFn: func(userID uint, items []services.OrderItemInput) (*models.Order, error) {
+				return nil, services.ErrOrderOwnProduct
+			},
+		}, &mockOrderPaymentService{})
+
+		recorder := performOrderJSONRequest(handler.CreateOrder, http.MethodPost, "/orders", map[string]any{
+			"items": []map[string]any{{"product_id": 4, "quantity": 1}},
+		}, nil, func(c *gin.Context) {
+			c.Set(constants.ContextKeyUserID, float64(8))
+		})
+
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("expected 403, got %d", recorder.Code)
+		}
+	})
 }
 
 func TestOrderHandlerFindOrder(t *testing.T) {
 	handler := NewOrderHandler(&mockOrderService{
-		listFn: func(userID uint) ([]*models.Order, error) {
+		listFn: func(userID uint, page services.Pagination) ([]*models.Order, int64, error) {
 			if userID != 12 {
 				t.Fatalf("expected user id 12, got %d", userID)
 			}
-			return []*models.Order{{Status: models.OrderStatusAwaitingPayment}}, nil
+			return []*models.Order{{Status: models.OrderStatusAwaitingPayment}}, 1, nil
 		},
 	}, &mockOrderPaymentService{})
 
@@ -121,6 +139,9 @@ func TestOrderHandlerFindOrder(t *testing.T) {
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", recorder.Code)
+	}
+	if recorder.Header().Get("X-Total-Count") != "1" {
+		t.Fatalf("expected X-Total-Count header of 1, got %q", recorder.Header().Get("X-Total-Count"))
 	}
 }
 
@@ -315,6 +336,70 @@ func TestOrderHandlerDeleteOrder(t *testing.T) {
 
 		if recorder.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d", recorder.Code)
+		}
+	})
+
+	t.Run("returns 502 and keeps the order when checkout release fails", func(t *testing.T) {
+		deleted := false
+		handler := NewOrderHandler(&mockOrderService{
+			deleteFn: func(actorID, orderID uint, actorRole string) error {
+				deleted = true
+				return nil
+			},
+		}, &mockOrderPaymentService{
+			releaseCheckoutFn: func(actorID, orderID uint, actorRole string) error {
+				return errors.New("stripe unavailable")
+			},
+		})
+
+		recorder := performOrderJSONRequest(
+			handler.DeleteOrder,
+			http.MethodDelete,
+			"/orders/4",
+			nil,
+			[]gin.Param{{Key: "id", Value: "4"}},
+			func(c *gin.Context) {
+				c.Set(constants.ContextKeyUserID, float64(9))
+			},
+		)
+
+		if recorder.Code != http.StatusBadGateway {
+			t.Fatalf("expected 502, got %d", recorder.Code)
+		}
+		if deleted {
+			t.Fatal("expected order deletion to be skipped when release fails")
+		}
+	})
+
+	t.Run("releases the checkout session before deleting", func(t *testing.T) {
+		released := false
+		handler := NewOrderHandler(&mockOrderService{
+			deleteFn: func(actorID, orderID uint, actorRole string) error {
+				if !released {
+					t.Fatal("expected checkout release before deletion")
+				}
+				return nil
+			},
+		}, &mockOrderPaymentService{
+			releaseCheckoutFn: func(actorID, orderID uint, actorRole string) error {
+				released = true
+				return nil
+			},
+		})
+
+		recorder := performOrderJSONRequest(
+			handler.DeleteOrder,
+			http.MethodDelete,
+			"/orders/4",
+			nil,
+			[]gin.Param{{Key: "id", Value: "4"}},
+			func(c *gin.Context) {
+				c.Set(constants.ContextKeyUserID, float64(9))
+			},
+		)
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", recorder.Code)
 		}
 	})
 }

@@ -29,6 +29,13 @@
 			</div>
 		{/if}
 
+		{#if data.sessionExpired && !form?.error}
+			<div class="theme-alert theme-alert-error mt-6" aria-live="polite">
+				<p class="theme-kicker">Session expiree</p>
+				<p class="mt-2 text-sm">Votre session a expire, veuillez vous reconnecter.</p>
+			</div>
+		{/if}
+
 		<form method="POST" class="mt-6 space-y-4">
 			<div>
 				<label for="email" class="theme-label">Email</label>

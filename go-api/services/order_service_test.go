@@ -201,6 +201,20 @@ func TestOrderServiceCreateOrderRejectsInsufficientStock(t *testing.T) {
 	}
 }
 
+func TestOrderServiceCreateOrderRejectsOwnProduct(t *testing.T) {
+	tx := openIntegrationTx(t)
+	service := NewOrderService(tx)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID)
+
+	_, err := service.CreateOrder(context.Background(), *product.SellerID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 1},
+	})
+	if !errors.Is(err, ErrOrderOwnProduct) {
+		t.Fatalf("expected ErrOrderOwnProduct, got %v", err)
+	}
+}
+
 func TestOrderServiceCreateOrderRejectsMissingProduct(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewOrderService(tx)
@@ -280,6 +294,123 @@ func TestOrderServiceDeleteRules(t *testing.T) {
 	}
 }
 
+func reloadProductStock(t *testing.T, tx *gorm.DB, productID uint) int {
+	t.Helper()
+
+	var product models.Product
+	if err := tx.First(&product, productID).Error; err != nil {
+		t.Fatalf("failed to reload product: %v", err)
+	}
+	return product.Stock
+}
+
+func TestOrderServiceCancelRestoresStock(t *testing.T) {
+	tx := openIntegrationTx(t)
+	service := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	admin := seedUser(t, tx, constants.RoleAdmin)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID) // stock: 10
+
+	order, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 3},
+	})
+	if err != nil {
+		t.Fatalf("expected order creation success, got %v", err)
+	}
+	if stock := reloadProductStock(t, tx, product.ID); stock != 7 {
+		t.Fatalf("expected stock 7 after order, got %d", stock)
+	}
+
+	if _, err := service.UpdateOrderStatus(
+		context.Background(),
+		admin.ID,
+		order.ID,
+		constants.RoleAdmin,
+		models.OrderStatusCancelled,
+	); err != nil {
+		t.Fatalf("expected cancellation success, got %v", err)
+	}
+
+	if stock := reloadProductStock(t, tx, product.ID); stock != 10 {
+		t.Fatalf("expected stock restored to 10 after cancellation, got %d", stock)
+	}
+
+	// Deleting the already-cancelled order must not restock a second time.
+	if err := service.DeleteOrder(context.Background(), admin.ID, order.ID, constants.RoleAdmin); err != nil {
+		t.Fatalf("expected admin delete success, got %v", err)
+	}
+	if stock := reloadProductStock(t, tx, product.ID); stock != 10 {
+		t.Fatalf("expected stock to stay at 10 after deleting cancelled order, got %d", stock)
+	}
+}
+
+func TestOrderServiceDeleteAwaitingPaymentRestoresStock(t *testing.T) {
+	tx := openIntegrationTx(t)
+	service := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID) // stock: 10
+
+	order, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 4},
+	})
+	if err != nil {
+		t.Fatalf("expected order creation success, got %v", err)
+	}
+	if stock := reloadProductStock(t, tx, product.ID); stock != 6 {
+		t.Fatalf("expected stock 6 after order, got %d", stock)
+	}
+
+	if err := service.DeleteOrder(context.Background(), user.ID, order.ID, constants.RoleUser); err != nil {
+		t.Fatalf("expected delete success, got %v", err)
+	}
+
+	if stock := reloadProductStock(t, tx, product.ID); stock != 10 {
+		t.Fatalf("expected stock restored to 10 after deletion, got %d", stock)
+	}
+}
+
+func TestOrderServiceDeleteDeliveredKeepsStock(t *testing.T) {
+	tx := openIntegrationTx(t)
+	service := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	admin := seedUser(t, tx, constants.RoleAdmin)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID) // stock: 10
+
+	order, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 2},
+	})
+	if err != nil {
+		t.Fatalf("expected order creation success, got %v", err)
+	}
+
+	for _, status := range []string{
+		models.OrderStatusPreparation,
+		models.OrderStatusShipping,
+		models.OrderStatusDelivered,
+	} {
+		if _, err := service.UpdateOrderStatus(
+			context.Background(),
+			admin.ID,
+			order.ID,
+			constants.RoleAdmin,
+			status,
+		); err != nil {
+			t.Fatalf("expected transition to %s, got %v", status, err)
+		}
+	}
+
+	if err := service.DeleteOrder(context.Background(), admin.ID, order.ID, constants.RoleAdmin); err != nil {
+		t.Fatalf("expected admin delete success, got %v", err)
+	}
+
+	if stock := reloadProductStock(t, tx, product.ID); stock != 8 {
+		t.Fatalf("expected sold stock to stay at 8, got %d", stock)
+	}
+}
+
 func TestOrderServiceListOrdersForUser(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewOrderService(tx)
@@ -299,15 +430,56 @@ func TestOrderServiceListOrdersForUser(t *testing.T) {
 		t.Fatalf("expected second order creation success, got %v", err)
 	}
 
-	orders, err := service.GetOrdersForUser(context.Background(), user.ID)
+	orders, total, err := service.GetOrdersForUser(context.Background(), user.ID, Pagination{})
 	if err != nil {
 		t.Fatalf("expected list success, got %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("expected total 1, got %d", total)
 	}
 	if len(orders) != 1 {
 		t.Fatalf("expected one order for user, got %d", len(orders))
 	}
 	if orders[0].UserID != user.ID {
 		t.Fatalf("expected user id %d, got %d", user.ID, orders[0].UserID)
+	}
+}
+
+func TestOrderServiceListOrdersForUserPagination(t *testing.T) {
+	tx := openIntegrationTx(t)
+	service := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+	product := seedProduct(t, tx, category.ID)
+
+	for i := 0; i < 3; i++ {
+		if _, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+			{ProductID: product.ID, Quantity: 1},
+		}); err != nil {
+			t.Fatalf("expected order %d creation success, got %v", i, err)
+		}
+	}
+
+	firstPage, total, err := service.GetOrdersForUser(context.Background(), user.ID, Pagination{Limit: 2, Offset: 0})
+	if err != nil {
+		t.Fatalf("expected first page success, got %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("expected total 3, got %d", total)
+	}
+	if len(firstPage) != 2 {
+		t.Fatalf("expected 2 orders on first page, got %d", len(firstPage))
+	}
+
+	secondPage, total, err := service.GetOrdersForUser(context.Background(), user.ID, Pagination{Limit: 2, Offset: 2})
+	if err != nil {
+		t.Fatalf("expected second page success, got %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("expected total 3, got %d", total)
+	}
+	if len(secondPage) != 1 {
+		t.Fatalf("expected 1 order on second page, got %d", len(secondPage))
 	}
 }
 

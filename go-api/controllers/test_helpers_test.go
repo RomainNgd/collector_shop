@@ -21,7 +21,9 @@ func init() {
 
 type mockAuthService struct {
 	registerFn func(email, password string) (*models.User, error)
-	loginFn    func(email, password string) (string, error)
+	loginFn    func(email, password string) (string, string, error)
+	refreshFn  func(refreshToken string) (string, string, error)
+	logoutFn   func(refreshToken string) error
 }
 
 func (m *mockAuthService) Register(_ context.Context, email, password string) (*models.User, error) {
@@ -31,27 +33,42 @@ func (m *mockAuthService) Register(_ context.Context, email, password string) (*
 	return nil, errors.New("unexpected Register call")
 }
 
-func (m *mockAuthService) Login(_ context.Context, email, password string) (string, error) {
+func (m *mockAuthService) Login(_ context.Context, email, password string) (string, string, error) {
 	if m.loginFn != nil {
 		return m.loginFn(email, password)
 	}
-	return "", errors.New("unexpected Login call")
+	return "", "", errors.New("unexpected Login call")
+}
+
+func (m *mockAuthService) RefreshAccessToken(_ context.Context, refreshToken string) (string, string, error) {
+	if m.refreshFn != nil {
+		return m.refreshFn(refreshToken)
+	}
+	return "", "", errors.New("unexpected RefreshAccessToken call")
+}
+
+func (m *mockAuthService) Logout(_ context.Context, refreshToken string) error {
+	if m.logoutFn != nil {
+		return m.logoutFn(refreshToken)
+	}
+	return errors.New("unexpected Logout call")
 }
 
 type mockProductService struct {
-	getAllFn       func() ([]*models.Product, error)
-	getForSellerFn func(sellerID uint) ([]*models.Product, error)
-	getByIDFn      func(id uint) (*models.Product, error)
-	createFn       func(product *models.Product) error
-	updateFn       func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error)
-	deleteFn       func(actorID uint, actorRole string, id uint) error
+	getAllFn           func(excludeSellerID *uint, page services.Pagination) ([]*models.Product, int64, error)
+	getForSellerFn     func(sellerID uint) ([]*models.Product, error)
+	getByIDFn          func(id uint) (*models.Product, error)
+	getForManagementFn func(actorID uint, actorRole string, id uint) (*models.Product, error)
+	createFn           func(product *models.Product) error
+	updateFn           func(actorID uint, actorRole string, id uint, updates map[string]interface{}) (*models.Product, error)
+	deleteFn           func(actorID uint, actorRole string, id uint) error
 }
 
-func (m *mockProductService) GetAllProducts(_ context.Context) ([]*models.Product, error) {
+func (m *mockProductService) GetAllProducts(_ context.Context, excludeSellerID *uint, page services.Pagination) ([]*models.Product, int64, error) {
 	if m.getAllFn != nil {
-		return m.getAllFn()
+		return m.getAllFn(excludeSellerID, page)
 	}
-	return nil, errors.New("unexpected GetAllProducts call")
+	return nil, 0, errors.New("unexpected GetAllProducts call")
 }
 
 func (m *mockProductService) GetProductsForSeller(_ context.Context, sellerID uint) ([]*models.Product, error) {
@@ -66,6 +83,13 @@ func (m *mockProductService) GetProductByID(_ context.Context, id uint) (*models
 		return m.getByIDFn(id)
 	}
 	return nil, errors.New("unexpected GetProductByID call")
+}
+
+func (m *mockProductService) GetProductForManagement(_ context.Context, actorID uint, actorRole string, id uint) (*models.Product, error) {
+	if m.getForManagementFn != nil {
+		return m.getForManagementFn(actorID, actorRole, id)
+	}
+	return nil, errors.New("unexpected GetProductForManagement call")
 }
 
 func (m *mockProductService) CreateProduct(_ context.Context, product *models.Product) error {
@@ -191,11 +215,11 @@ func (m *mockOrderService) CreateOrder(_ context.Context, userID uint, items []s
 	return nil, errors.New("unexpected CreateOrder call")
 }
 
-func (m *mockOrderService) GetOrdersForUser(_ context.Context, userID uint) ([]*models.Order, error) {
+func (m *mockOrderService) GetOrdersForUser(_ context.Context, userID uint, page services.Pagination) ([]*models.Order, int64, error) {
 	if m.listFn != nil {
-		return m.listFn(userID)
+		return m.listFn(userID, page)
 	}
-	return nil, errors.New("unexpected GetOrdersForUser call")
+	return nil, 0, errors.New("unexpected GetOrdersForUser call")
 }
 
 func (m *mockOrderService) GetOrderByID(_ context.Context, actorID, orderID uint, actorRole string) (*models.Order, error) {
@@ -227,8 +251,9 @@ func (m *mockOrderService) GetSellerStats(_ context.Context, sellerID uint) (*se
 }
 
 type mockOrderPaymentService struct {
-	createCheckoutFn func(actorID, orderID uint, actorRole, successURL, cancelURL string) (*services.OrderCheckoutSessionResult, error)
-	handleWebhookFn  func(payload []byte, signature string) error
+	createCheckoutFn  func(actorID, orderID uint, actorRole, successURL, cancelURL string) (*services.OrderCheckoutSessionResult, error)
+	releaseCheckoutFn func(actorID, orderID uint, actorRole string) error
+	handleWebhookFn   func(payload []byte, signature string) error
 }
 
 func (m *mockOrderPaymentService) CreateStripeCheckoutSession(_ context.Context, actorID, orderID uint, actorRole, successURL, cancelURL string) (*services.OrderCheckoutSessionResult, error) {
@@ -236,6 +261,15 @@ func (m *mockOrderPaymentService) CreateStripeCheckoutSession(_ context.Context,
 		return m.createCheckoutFn(actorID, orderID, actorRole, successURL, cancelURL)
 	}
 	return nil, errors.New("unexpected CreateStripeCheckoutSession call")
+}
+
+func (m *mockOrderPaymentService) ReleaseCheckoutSession(_ context.Context, actorID, orderID uint, actorRole string) error {
+	if m.releaseCheckoutFn != nil {
+		return m.releaseCheckoutFn(actorID, orderID, actorRole)
+	}
+	// Deleting an order always releases its checkout first; default to a
+	// no-op so existing deletion tests keep exercising the delete path.
+	return nil
 }
 
 func (m *mockOrderPaymentService) HandleStripeWebhook(_ context.Context, payload []byte, signature string) error {

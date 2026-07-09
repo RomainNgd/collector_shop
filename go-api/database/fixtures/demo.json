@@ -1,20 +1,12 @@
 {
   "categories": [
     {
-      "name": "Demo - Cartes gradees",
-      "description": "Cartes a collectionner notees et protegees pour les collectionneurs exigeants."
+      "name": "Demo - Meubles anciens",
+      "description": "Meubles d'epoque chines et restaures pour les amateurs de brocante et d'antiquites."
     },
     {
-      "name": "Demo - Booster boxes",
-      "description": "Displays et coffrets scelles pour ouvrir, garder en vitrine ou investir."
-    },
-    {
-      "name": "Demo - Accessoires",
-      "description": "Protections, rangements et solutions premium pour conserver la collection."
-    },
-    {
-      "name": "Demo - Retro gaming",
-      "description": "Pieces retro et editions collector pour completer un setup nostalgique."
+      "name": "Demo - Objets de decoration anciens",
+      "description": "Miroirs, luminaires et vitrines d'epoque pour sublimer un interieur de caractere."
     }
   ],
   "users": [
@@ -32,75 +24,187 @@
       "email": "user2@user.fr",
       "password": "Test123456!",
       "role": "ROLE_USER"
+    },
+    {
+      "email": "brocante.dubois@user.fr",
+      "password": "Test123456!",
+      "role": "ROLE_USER"
+    },
+    {
+      "email": "antiquites.lefevre@user.fr",
+      "password": "Test123456!",
+      "role": "ROLE_USER"
     }
   ],
   "products": [
     {
-      "name": "Demo - Dracaufeu EX PSA 10",
-      "description": "Carte Dracaufeu EX en slab PSA 10, parfaite pour lancer une vitrine premium.",
+      "name": "Demo - Commode Louis XV en marqueterie",
+      "description": "Commode d'epoque en marqueterie, bronzes d'origine, ideale pour une vitrine premium.",
       "image": "seed-charizard-psa.svg",
       "price": 649.9,
-      "category": "Demo - Cartes gradees"
+      "category": "Demo - Meubles anciens",
+      "seller": "user@user.fr"
     },
     {
-      "name": "Demo - Display Pokemon 151 JP",
-      "description": "Display scellee Pokemon 151 en version japonaise, tres recherchee par les collectionneurs.",
+      "name": "Demo - Armoire normande en chene massif",
+      "description": "Armoire normande sculptee en chene massif, tres recherchee par les collectionneurs de mobilier ancien.",
       "image": "seed-pokemon-151-box.svg",
       "price": 189.9,
-      "category": "Demo - Booster boxes"
+      "category": "Demo - Meubles anciens",
+      "seller": "user@user.fr"
     },
     {
-      "name": "Demo - Display One Piece Wings of the Captain",
-      "description": "Booster box One Piece pour enrichir une collection TCG moderne et populaire.",
+      "name": "Demo - Buffet deux corps en merisier",
+      "description": "Buffet deux corps en merisier pour enrichir une collection de mobilier ancien.",
       "image": "seed-one-piece-box.svg",
       "price": 119.9,
-      "category": "Demo - Booster boxes"
+      "category": "Demo - Meubles anciens",
+      "seller": "user@user.fr"
     },
     {
-      "name": "Demo - Classeur Top Loader 9 cases",
-      "description": "Classeur rigide concu pour les top loaders, ideal pour les cartes a forte valeur.",
+      "name": "Demo - Fauteuil crapaud Napoleon III",
+      "description": "Fauteuil capitonne Napoleon III, garnissage d'origine restaure.",
       "image": "seed-toploader-binder.svg",
       "price": 39.9,
-      "category": "Demo - Accessoires"
+      "category": "Demo - Meubles anciens",
+      "seller": "user@user.fr"
     },
     {
-      "name": "Demo - Coffret acrylic premium",
-      "description": "Protection acrylique premium pour exposer un display ou une elite trainer box.",
+      "name": "Demo - Secretaire marquete a abattant",
+      "description": "Secretaire a abattant marquete, parfait pour exposer une piece de caractere.",
       "image": "seed-acrylic-case.svg",
       "price": 24.9,
-      "category": "Demo - Accessoires"
+      "category": "Demo - Meubles anciens",
+      "seller": "user@user.fr"
     },
     {
-      "name": "Demo - Game Boy Color Pikachu Edition",
-      "description": "Console retro iconique en edition Pikachu, parfaite pour une selection collector lifestyle.",
+      "name": "Demo - Horloge comtoise en bois sculpte",
+      "description": "Horloge comtoise ancienne en bois sculpte, mecanisme d'epoque, parfaite pour une selection collector lifestyle.",
       "image": "seed-gameboy-pikachu.svg",
       "price": 219.9,
-      "category": "Demo - Retro gaming"
+      "category": "Demo - Meubles anciens",
+      "seller": "user@user.fr"
+    },
+    {
+      "name": "Demo - Bibliotheque marine en acajou",
+      "description": "Bibliotheque marine en acajou avec portes vitrees, chinee en brocante.",
+      "image": "seed-bibliotheque-marine.svg",
+      "price": 549.9,
+      "category": "Demo - Meubles anciens",
+      "seller": "brocante.dubois@user.fr"
+    },
+    {
+      "name": "Demo - Gueridon a plateau de marbre",
+      "description": "Gueridon en fonte a plateau de marbre, style bistrot ancien.",
+      "image": "seed-gueridon-marbre.svg",
+      "price": 159.9,
+      "category": "Demo - Meubles anciens",
+      "seller": "brocante.dubois@user.fr"
+    },
+    {
+      "name": "Demo - Chaise cannee style Directoire",
+      "description": "Chaise cannee style Directoire, assise restauree, vendue a l'unite.",
+      "image": "seed-chaise-cannee.svg",
+      "price": 79.9,
+      "category": "Demo - Meubles anciens",
+      "seller": "brocante.dubois@user.fr"
+    },
+    {
+      "name": "Demo - Console doree a la feuille d'or",
+      "description": "Console dorée a la feuille d'or, plateau en marbre, piece d'exception pour un salon d'epoque.",
+      "image": "seed-console-doree.svg",
+      "price": 429.9,
+      "category": "Demo - Meubles anciens",
+      "seller": "brocante.dubois@user.fr"
+    },
+    {
+      "name": "Demo - Vaisselier provencal en chataignier",
+      "description": "Vaisselier provencal en chataignier, vitrage d'origine, ideal pour une salle a manger de caractere.",
+      "image": "seed-vaisselier-provencal.svg",
+      "price": 389.9,
+      "category": "Demo - Meubles anciens",
+      "seller": "brocante.dubois@user.fr"
+    },
+    {
+      "name": "Demo - Table de chevet marquetee",
+      "description": "Table de chevet marquetee assortie aux commodes d'epoque, tiroir et niche basse.",
+      "image": "seed-table-chevet.svg",
+      "price": 99.9,
+      "category": "Demo - Meubles anciens",
+      "seller": "brocante.dubois@user.fr"
+    },
+    {
+      "name": "Demo - Bergere Louis XVI cannelee",
+      "description": "Bergere Louis XVI a cannelures, garniture en velours vert restauree.",
+      "image": "seed-bergere-louis-xvi.svg",
+      "price": 459.9,
+      "category": "Demo - Meubles anciens",
+      "seller": "antiquites.lefevre@user.fr"
+    },
+    {
+      "name": "Demo - Bureau ecritoire a caissons",
+      "description": "Bureau ecritoire a caissons avec cuir patine, parfait pour un bureau d'epoque.",
+      "image": "seed-ecritoire-bureau.svg",
+      "price": 599.9,
+      "category": "Demo - Meubles anciens",
+      "seller": "antiquites.lefevre@user.fr"
+    },
+    {
+      "name": "Demo - Applique en bronze dore",
+      "description": "Applique murale en bronze dore a deux bras de lumiere, style XIXe.",
+      "image": "seed-applique-bronze.svg",
+      "price": 149.9,
+      "category": "Demo - Objets de decoration anciens",
+      "seller": "antiquites.lefevre@user.fr"
+    },
+    {
+      "name": "Demo - Banc en fer forge et bois",
+      "description": "Banc de jardin en fer forge et lattes de bois, patine d'origine.",
+      "image": "seed-banc-ferronnerie.svg",
+      "price": 189.9,
+      "category": "Demo - Meubles anciens",
+      "seller": "antiquites.lefevre@user.fr"
+    },
+    {
+      "name": "Demo - Psyche a cheval en acajou",
+      "description": "Miroir psyche sur pied en acajou, glace biseautee d'origine.",
+      "image": "seed-psyche-cheval.svg",
+      "price": 349.9,
+      "category": "Demo - Objets de decoration anciens",
+      "seller": "antiquites.lefevre@user.fr"
+    },
+    {
+      "name": "Demo - Vitrine de boutique ancienne",
+      "description": "Vitrine de boutique ancienne en bois et verre, ideale pour exposer une collection.",
+      "image": "seed-vitrine-boutique.svg",
+      "price": 519.9,
+      "category": "Demo - Objets de decoration anciens",
+      "seller": "antiquites.lefevre@user.fr"
     }
   ],
   "promotions": [
     {
-      "name": "Demo - Weekend scelle",
-      "description": "Remise reservee aux displays et booster boxes du moment.",
+      "name": "Demo - Weekend meubles",
+      "description": "Remise reservee aux meubles d'epoque du moment.",
       "type": "percentage",
       "value": 10,
       "is_active": true,
       "applies_to_all": false,
       "products": [
-        "Demo - Display Pokemon 151 JP",
-        "Demo - Display One Piece Wings of the Captain"
+        "Demo - Armoire normande en chene massif",
+        "Demo - Buffet deux corps en merisier"
       ]
     },
     {
-      "name": "Demo - Accessoires malins",
-      "description": "Petit coup de pouce fixe sur les accessoires de protection.",
+      "name": "Demo - Petits meubles malins",
+      "description": "Petit coup de pouce fixe sur les petits meubles et objets d'appoint.",
       "type": "fixed",
       "value": 5,
       "is_active": true,
       "applies_to_all": false,
       "products": [
-        "Demo - Classeur Top Loader 9 cases",
-        "Demo - Coffret acrylic premium"
+        "Demo - Table de chevet marquetee",
+        "Demo - Applique en bronze dore"
       ]
     },
     {
