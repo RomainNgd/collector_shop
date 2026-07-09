@@ -77,9 +77,6 @@
 							class="nav-link"
 							class:active={isActive('/mes-commandes')}>Mes commandes</a
 						>
-						<a href={resolve('/profil')} class="nav-link" class:active={isActive('/profil')}
-							>Profil</a
-						>
 					{/if}
 					{#if data.user?.role === ADMIN_ROLE}
 						<a
@@ -93,9 +90,8 @@
 
 			<div class="flex items-center gap-3">
 				{#if data.user}
-					<span class="theme-pill theme-pill-contrast account-pill hidden sm:inline-flex">
-						Connecte: {data.user.role}
-					</span>
+					<a href={resolve('/profil')} class="nav-link" class:active={isActive('/profil')}>Profil</a
+					>
 					<form method="POST" action={resolve('/logout')}>
 						<button type="submit" class="header-action header-action-secondary">
 							Deconnexion
