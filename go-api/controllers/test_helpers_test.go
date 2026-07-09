@@ -201,7 +201,7 @@ func (m *mockPromotionService) DeletePromotion(_ context.Context, actorID uint, 
 
 type mockOrderService struct {
 	createFn     func(userID uint, items []services.OrderItemInput) (*models.Order, error)
-	listFn       func(userID uint) ([]*models.Order, error)
+	listFn       func(userID uint, page services.Pagination) ([]*models.Order, int64, error)
 	getByIDFn    func(actorID, orderID uint, actorRole string) (*models.Order, error)
 	updateFn     func(actorID, orderID uint, actorRole, status string) (*models.Order, error)
 	deleteFn     func(actorID, orderID uint, actorRole string) error
