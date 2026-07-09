@@ -47,8 +47,8 @@ k6 run .\tests\load\collector-spa\k6\scale-up.js -e BASE_URL=http://192.168.1.50
 - `BASE_URL`: URL d'entree du front. Defaut `https://collector-app.romainnigond.fr`
 - `PATH_TO_HIT`: chemin HTTP cible. Defaut `/`
 - `HOST_HEADER`: header `Host` optionnel si tu passes par l'IP du noeud
-- `PEAK_VUS`: charge max. Defaut `180`
-- `BATCH_SIZE`: nombre de requetes paralleles par iteration. Defaut `4`
+- `PEAK_VUS`: charge max. Defaut `60`
+- `BATCH_SIZE`: nombre de requetes paralleles par iteration. Defaut `2`
 
 ## Conserver les preuves d'une campagne
 

@@ -65,29 +65,35 @@ spec:
               mountPath: /tmp
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
+              cpu: 250m
               memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
           startupProbe:
             httpGet:
-              path: /
+              path: /health
               port: 3000
             failureThreshold: 30
             periodSeconds: 5
+          # La liveness doit detecter un process bloque, pas un process
+          # surcharge: timeout et failureThreshold larges pour survivre
+          # a un pic de charge sans que le kubelet tue le conteneur.
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 3000
             initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 3
       volumes:
         - name: tmp
           emptyDir: {}
