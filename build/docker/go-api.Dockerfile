@@ -11,7 +11,7 @@ RUN go mod download
 COPY go-api/ ./
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/go-api ./main.go
 
-FROM alpine:3.22 AS runtime
+FROM alpine:3.24 AS runtime
 
 WORKDIR /app
 
