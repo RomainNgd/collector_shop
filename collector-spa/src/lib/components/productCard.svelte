@@ -39,11 +39,17 @@
 			{#if promotionBadgeLabel}
 				<span class="promotion-badge">{promotionBadgeLabel}</span>
 			{/if}
-			<img
-				src={product.imageUrl}
-				alt={product.name}
-				class="media aspect-square w-full object-cover"
-			/>
+			{#if product.imageName}
+				<img
+					src={product.imageUrl}
+					alt={product.name}
+					class="media aspect-square w-full object-cover"
+				/>
+			{:else}
+				<div class="theme-media-fallback" aria-hidden="true">
+					<span>{product.name.charAt(0).toUpperCase()}</span>
+				</div>
+			{/if}
 		</div>
 
 		<div class="mt-5">
@@ -55,7 +61,7 @@
 
 			<div class="mt-5 flex items-end justify-between gap-4">
 				<ProductPrice {product} />
-				<span class="product-link">Voir le detail</span>
+				<span class="product-link">Voir le detail <span class="product-link-arrow">→</span></span>
 			</div>
 		</div>
 	</a>
@@ -87,11 +93,21 @@
 		padding: 0.9rem;
 	}
 
+	.media-wrap :global(.media) {
+		transition: transform var(--transition-slow);
+	}
+
+	.product-card:hover .media-wrap :global(.media) {
+		transform: scale(1.045);
+	}
+
 	.product-category {
 		position: absolute;
 		top: 0.9rem;
 		left: 0.9rem;
 		z-index: 2;
+		backdrop-filter: blur(8px);
+		background: rgb(var(--color-white-rgb) / 0.72);
 	}
 
 	.promotion-badge {
@@ -115,11 +131,23 @@
 	}
 
 	.product-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
 		font-size: 0.82rem;
 		font-weight: 800;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		color: var(--color-primary);
+	}
+
+	.product-link-arrow {
+		display: inline-block;
+		transition: transform var(--transition-standard);
+	}
+
+	.product-card:hover .product-link-arrow {
+		transform: translateX(3px);
 	}
 
 	.add-btn.added {

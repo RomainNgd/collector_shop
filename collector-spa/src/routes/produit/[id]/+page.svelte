@@ -39,7 +39,13 @@
 			{#if promotionBadgeLabel}
 				<span class="promotion-badge">{promotionBadgeLabel}</span>
 			{/if}
-			<img src={data.product.imageUrl} alt={data.product.name} class="product-image" />
+			{#if data.product.imageName}
+				<img src={data.product.imageUrl} alt={data.product.name} class="product-image" />
+			{:else}
+				<div class="theme-media-fallback product-image-fallback" aria-hidden="true">
+					<span>{data.product.name.charAt(0).toUpperCase()}</span>
+				</div>
+			{/if}
 		</div>
 
 		<div class="content-shell">
@@ -146,6 +152,18 @@
 		width: auto;
 		object-fit: contain;
 		animation: image-pop 520ms cubic-bezier(0.2, 0.9, 0.24, 1);
+	}
+
+	.product-image-fallback {
+		position: relative;
+		z-index: 1;
+		max-width: 24rem;
+		aspect-ratio: 1 / 1;
+		animation: image-pop 520ms cubic-bezier(0.2, 0.9, 0.24, 1);
+	}
+
+	.product-image-fallback span {
+		font-size: 4.5rem;
 	}
 
 	.meta-list {

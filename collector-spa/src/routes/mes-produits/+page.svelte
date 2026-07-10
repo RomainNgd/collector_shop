@@ -328,11 +328,19 @@
 								<tr>
 									<td>
 										<div class="row-media">
-											<img
-												src={product.imageUrl}
-												alt={product.name}
-												class="h-16 w-16 rounded-2xl object-cover"
-											/>
+											{#if product.imageName}
+												<img
+													src={product.imageUrl}
+													alt={product.name}
+													class="h-16 w-16 rounded-2xl object-cover"
+												/>
+											{:else}
+												<div class="theme-media-fallback h-16 w-16" aria-hidden="true">
+													<span class="row-media-fallback-letter"
+														>{product.name.charAt(0).toUpperCase()}</span
+													>
+												</div>
+											{/if}
 											<div>
 												<p class="theme-title font-bold">{product.name}</p>
 												<p class="theme-copy mt-1 text-sm">ID #{product.id}</p>
@@ -761,11 +769,19 @@
 				<div class="theme-card image-preview-card p-4">
 					<div>
 						<p class="theme-label">Image actuelle</p>
-						<img
-							src={selectedProduct?.imageUrl}
-							alt={selectedProduct?.name ?? 'Produit'}
-							class="h-28 w-28 rounded-2xl object-cover"
-						/>
+						{#if selectedProduct?.imageName}
+							<img
+								src={selectedProduct?.imageUrl}
+								alt={selectedProduct?.name ?? 'Produit'}
+								class="h-28 w-28 rounded-2xl object-cover"
+							/>
+						{:else}
+							<div class="theme-media-fallback h-28 w-28" aria-hidden="true">
+								<span class="row-media-fallback-letter"
+									>{(selectedProduct?.name ?? '?').charAt(0).toUpperCase()}</span
+								>
+							</div>
+						{/if}
 					</div>
 					<div class="space-y-4">
 						<div>
@@ -1225,6 +1241,10 @@
 		display: flex;
 		align-items: center;
 		gap: 1rem;
+	}
+
+	.row-media-fallback-letter {
+		font-size: 1.5rem;
 	}
 
 	.action-row {

@@ -7,12 +7,23 @@
 
 <section class="grid gap-8 lg:grid-cols-[1.05fr_0.9fr] lg:items-center">
 	<div class="theme-panel login-showcase p-8 md:p-10">
-		<span class="theme-pill">Espace membre</span>
-		<p class="theme-kicker mt-6">Connexion</p>
-		<h1 class="theme-title mt-4 text-4xl font-black md:text-5xl">Retrouve ton compte</h1>
-		<p class="theme-copy mt-4 max-w-xl">
+		<span class="theme-pill theme-pill-contrast">Espace membre</span>
+		<p class="theme-kicker showcase-kicker mt-6">Connexion</p>
+		<h1 class="showcase-title mt-4 text-4xl font-black md:text-5xl">Retrouve ton compte</h1>
+		<p class="showcase-copy mt-4 max-w-xl">
 			Connecte-toi pour acceder a ton espace et continuer sur le shop.
 		</p>
+
+		<div class="login-benefits mt-8">
+			<div class="benefit-row">
+				<span class="benefit-dot"></span>
+				<p>Ton panier et ton historique de commandes retrouves instantanement.</p>
+			</div>
+			<div class="benefit-row">
+				<span class="benefit-dot"></span>
+				<p>Un espace vendeur si tu proposes deja des pieces sur le shop.</p>
+			</div>
+		</div>
 	</div>
 
 	<div class="theme-panel p-8 shadow-sm">
@@ -85,6 +96,59 @@
 
 <style>
 	.login-showcase {
+		position: relative;
+		overflow: hidden;
 		max-width: 32rem;
+		background: var(--gradient-primary);
+		box-shadow: var(--shadow-strong);
+	}
+
+	.login-showcase::after {
+		content: '';
+		position: absolute;
+		top: -4rem;
+		right: -4rem;
+		height: 14rem;
+		width: 14rem;
+		border-radius: 42% 58% 65% 35% / 45% 45% 55% 55%;
+		background: rgb(var(--color-secondary-rgb) / 0.22);
+		filter: blur(2px);
+	}
+
+	.showcase-kicker {
+		color: rgb(var(--color-secondary-rgb));
+	}
+
+	.showcase-title {
+		color: var(--color-white);
+		letter-spacing: -0.04em;
+	}
+
+	.showcase-copy {
+		color: rgb(var(--color-white-rgb) / 0.78);
+	}
+
+	.login-benefits {
+		display: flex;
+		flex-direction: column;
+		gap: 0.85rem;
+	}
+
+	.benefit-row {
+		position: relative;
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		font-size: 0.9rem;
+		color: rgb(var(--color-white-rgb) / 0.86);
+	}
+
+	.benefit-dot {
+		margin-top: 0.4rem;
+		height: 0.4rem;
+		width: 0.4rem;
+		flex-shrink: 0;
+		border-radius: 999px;
+		background: var(--color-secondary);
 	}
 </style>

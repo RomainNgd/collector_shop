@@ -154,7 +154,13 @@
 							<tr>
 								<td>
 									<div class="product-cell">
-										<img src={product.imageUrl} alt={product.name} class="product-thumb" />
+										{#if product.imageName}
+											<img src={product.imageUrl} alt={product.name} class="product-thumb" />
+										{:else}
+											<div class="product-thumb theme-media-fallback" aria-hidden="true">
+												<span>{product.name.charAt(0).toUpperCase()}</span>
+											</div>
+										{/if}
 										<div>
 											<p class="theme-title text-lg font-black">{product.name}</p>
 											<p class="theme-copy mt-2 line-clamp-2 text-sm">
@@ -262,10 +268,18 @@
 	.product-thumb {
 		height: 5rem;
 		width: 5rem;
+		flex-shrink: 0;
 		border-radius: 1rem;
 		border: 1px solid rgb(var(--color-primary-rgb) / 0.08);
 		object-fit: cover;
+	}
+
+	img.product-thumb {
 		background: rgb(var(--color-white-rgb) / 0.88);
+	}
+
+	.product-thumb.theme-media-fallback span {
+		font-size: 1.5rem;
 	}
 
 	.action-link {
