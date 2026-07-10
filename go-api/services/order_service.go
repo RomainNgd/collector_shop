@@ -29,12 +29,19 @@ type OrderItemInput struct {
 	Quantity  int
 }
 
+type SellerStats struct {
+	TotalRevenue float64 `json:"total_revenue"`
+	TotalSales   int     `json:"total_sales"`
+	ProductCount int     `json:"product_count"`
+}
+
 type OrderServiceInterface interface {
 	CreateOrder(ctx context.Context, userID uint, items []OrderItemInput) (*models.Order, error)
 	GetOrdersForUser(ctx context.Context, userID uint, page Pagination) ([]*models.Order, int64, error)
 	GetOrderByID(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error)
 	UpdateOrderStatus(ctx context.Context, actorID, orderID uint, actorRole, status string) (*models.Order, error)
 	DeleteOrder(ctx context.Context, actorID, orderID uint, actorRole string) error
+	GetSellerStats(ctx context.Context, sellerID uint) (*SellerStats, error)
 }
 
 type OrderService struct {
@@ -226,6 +233,36 @@ func (s *OrderService) GetOrdersForUser(ctx context.Context, userID uint, page P
 	}
 
 	return orders, total, nil
+}
+
+func (s *OrderService) GetSellerStats(ctx context.Context, sellerID uint) (*SellerStats, error) {
+	ctx, cancel := withDBTimeout(ctx)
+	defer cancel()
+
+	stats := &SellerStats{}
+
+	row := s.db.WithContext(ctx).
+		Model(&models.OrderItem{}).
+		Joins("JOIN orders ON orders.id = order_items.order_id").
+		Where("order_items.seller_id = ? AND orders.payment_status = ?", sellerID, models.OrderPaymentStatusPaid).
+		Select("COALESCE(SUM(order_items.line_total), 0) AS total_revenue, COALESCE(SUM(order_items.quantity), 0) AS total_sales").
+		Row()
+
+	if err := row.Scan(&stats.TotalRevenue, &stats.TotalSales); err != nil {
+		return nil, fmt.Errorf("failed to aggregate seller sales: %w", err)
+	}
+	stats.TotalRevenue = roundCurrency(stats.TotalRevenue)
+
+	var productCount int64
+	if err := s.db.WithContext(ctx).
+		Model(&models.Product{}).
+		Where("seller_id = ?", sellerID).
+		Count(&productCount).Error; err != nil {
+		return nil, fmt.Errorf("failed to count seller products: %w", err)
+	}
+	stats.ProductCount = int(productCount)
+
+	return stats, nil
 }
 
 func (s *OrderService) GetOrderByID(ctx context.Context, actorID, orderID uint, actorRole string) (*models.Order, error) {

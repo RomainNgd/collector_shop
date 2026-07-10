@@ -35,6 +35,22 @@
 
 	{#if $cartItems.length === 0}
 		<div class="theme-empty theme-panel">
+			<div class="theme-empty-icon" aria-hidden="true">
+				<svg
+					width="28"
+					height="28"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<circle cx="9" cy="21" r="1" />
+					<circle cx="19" cy="21" r="1" />
+					<path d="M2.5 2.5h2l2.4 12.4a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.6L21.5 7H6" />
+				</svg>
+			</div>
 			<p class="theme-title text-lg font-bold">Votre panier est vide.</p>
 			<p class="theme-copy mt-3">Retourne sur le catalogue pour ajouter de nouvelles pieces.</p>
 			<div class="mt-6 flex justify-center">
@@ -51,11 +67,19 @@
 						class="theme-card theme-hover-lift flex flex-col gap-4 p-4 sm:flex-row sm:items-center"
 					>
 						<div class="item-image-shell">
-							<img
-								src={item.product.imageUrl}
-								alt={item.product.name}
-								class="item-image h-24 w-24 rounded-2xl object-cover"
-							/>
+							{#if item.product.imageName}
+								<img
+									src={item.product.imageUrl}
+									alt={item.product.name}
+									class="item-image h-24 w-24 rounded-2xl object-cover"
+								/>
+							{:else}
+								<div class="item-image theme-media-fallback h-24 w-24" aria-hidden="true">
+									<span class="item-image-fallback-letter"
+										>{item.product.name.charAt(0).toUpperCase()}</span
+									>
+								</div>
+							{/if}
 						</div>
 
 						<div class="min-w-0 flex-1">
@@ -185,6 +209,10 @@
 
 	.item-image {
 		border-radius: 1rem;
+	}
+
+	.item-image-fallback-letter {
+		font-size: 1.65rem;
 	}
 
 	.quantity-control {

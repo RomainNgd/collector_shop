@@ -96,6 +96,96 @@ func TestOrderServiceCreateOrderLocksPricing(t *testing.T) {
 	}
 }
 
+func TestOrderServiceGetSellerStats(t *testing.T) {
+	tx := openIntegrationTx(t)
+	if err := tx.Where("applies_to_all = ?", true).Delete(&models.Promotion{}).Error; err != nil {
+		t.Fatalf("failed to clear global promotions: %v", err)
+	}
+	service := NewOrderService(tx)
+	user := seedUser(t, tx, constants.RoleUser)
+	seller := seedUser(t, tx, constants.RoleUser)
+	otherSeller := seedUser(t, tx, constants.RoleUser)
+	category := seedCategory(t, tx)
+
+	product := &models.Product{
+		Name:        fmt.Sprintf("Stats-%d", time.Now().UnixNano()),
+		Description: "Collector item",
+		Image:       "item.png",
+		Price:       50,
+		Stock:       10,
+		IsActive:    true,
+		SellerID:    &seller.ID,
+		CategoryID:  category.ID,
+	}
+	if err := tx.Create(product).Error; err != nil {
+		t.Fatalf("failed to create product: %v", err)
+	}
+
+	otherProduct := &models.Product{
+		Name:        fmt.Sprintf("OtherStats-%d", time.Now().UnixNano()),
+		Description: "Other seller item",
+		Image:       "other.png",
+		Price:       30,
+		Stock:       10,
+		IsActive:    true,
+		SellerID:    &otherSeller.ID,
+		CategoryID:  category.ID,
+	}
+	if err := tx.Create(otherProduct).Error; err != nil {
+		t.Fatalf("failed to create other product: %v", err)
+	}
+
+	paidOrder, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 3},
+	})
+	if err != nil {
+		t.Fatalf("expected paid order creation success, got %v", err)
+	}
+	if err := tx.Model(&models.Order{}).Where("id = ?", paidOrder.ID).Update("payment_status", models.OrderPaymentStatusPaid).Error; err != nil {
+		t.Fatalf("failed to mark order paid: %v", err)
+	}
+
+	unpaidOrder, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: product.ID, Quantity: 2},
+	})
+	if err != nil {
+		t.Fatalf("expected unpaid order creation success, got %v", err)
+	}
+	_ = unpaidOrder
+
+	if _, err := service.CreateOrder(context.Background(), user.ID, []OrderItemInput{
+		{ProductID: otherProduct.ID, Quantity: 5},
+	}); err != nil {
+		t.Fatalf("expected other seller order creation success, got %v", err)
+	}
+	if err := tx.Model(&models.Order{}).Where("user_id = ? AND id NOT IN ?", user.ID, []uint{paidOrder.ID, unpaidOrder.ID}).
+		Update("payment_status", models.OrderPaymentStatusPaid).Error; err != nil {
+		t.Fatalf("failed to mark other seller order paid: %v", err)
+	}
+
+	stats, err := service.GetSellerStats(context.Background(), seller.ID)
+	if err != nil {
+		t.Fatalf("expected stats success, got %v", err)
+	}
+	if stats.TotalRevenue != 150 {
+		t.Fatalf("expected revenue 150 (only paid order counted), got %f", stats.TotalRevenue)
+	}
+	if stats.TotalSales != 3 {
+		t.Fatalf("expected 3 units sold (only paid order counted), got %d", stats.TotalSales)
+	}
+	if stats.ProductCount != 1 {
+		t.Fatalf("expected 1 product for seller, got %d", stats.ProductCount)
+	}
+
+	otherStats, err := service.GetSellerStats(context.Background(), otherSeller.ID)
+	if err != nil {
+		t.Fatalf("expected other seller stats success, got %v", err)
+	}
+	if otherStats.TotalRevenue != 150 || otherStats.TotalSales != 5 || otherStats.ProductCount != 1 {
+		t.Fatalf("unexpected other seller stats: %#v", otherStats)
+	}
+}
+
 func TestOrderServiceCreateOrderRejectsInsufficientStock(t *testing.T) {
 	tx := openIntegrationTx(t)
 	service := NewOrderService(tx)

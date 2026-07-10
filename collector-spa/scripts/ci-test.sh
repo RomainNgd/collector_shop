@@ -15,3 +15,6 @@ npm run check
 
 echo "Running frontend unit tests"
 npm run test:coverage
+
+echo "Building frontend"
+npm run build

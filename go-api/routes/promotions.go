@@ -9,7 +9,7 @@ import (
 
 func SetupPromotionRoutes(r *gin.Engine, promotionHandler *controllers.PromotionHandler, authMW *middlewares.AuthMiddleware) {
 	promotions := r.Group("/promotions")
-	promotions.Use(authMW.Authenticate(), authMW.RequireAdmin())
+	promotions.Use(authMW.Authenticate())
 	{
 		promotions.GET("", promotionHandler.FindPromotion)
 		promotions.GET("/:id", promotionHandler.FindOnePromotion)

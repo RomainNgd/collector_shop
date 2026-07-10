@@ -69,7 +69,7 @@
 							<a
 								href={resolve('/mes-produits')}
 								class="nav-link"
-								class:active={isActive('/mes-produits')}>Mes produits</a
+								class:active={isActive('/mes-produits')}>Dashboard</a
 							>
 						{/if}
 						<a
@@ -88,25 +88,37 @@
 				</nav>
 			</div>
 
-			<div class="flex items-center gap-3">
+			<div class="flex items-center gap-2 sm:gap-3">
 				{#if data.user}
-					<a href={resolve('/profil')} class="nav-link" class:active={isActive('/profil')}>Profil</a
+					<a
+						href={resolve('/profil')}
+						class="nav-link hidden md:inline-flex"
+						class:active={isActive('/profil')}>Profil</a
 					>
 					<form method="POST" action={resolve('/logout')}>
-						<button type="submit" class="header-action header-action-secondary">
-							Deconnexion
+						<button type="submit" class="header-action header-action-secondary compact-action">
+							<span class="hidden sm:inline">Deconnexion</span>
+							<span class="sm:hidden" aria-hidden="true">⏻</span>
 						</button>
 					</form>
 				{:else}
-					<a href={resolve('/auth/register')} class="header-action header-action-primary">
-						Inscription
+					<a
+						href={resolve('/auth/register')}
+						class="header-action header-action-primary compact-action"
+					>
+						<span class="hidden sm:inline">Inscription</span>
+						<span class="sm:hidden">S'inscrire</span>
 					</a>
-					<a href={resolve('/login')} class="header-action header-action-secondary">Connexion</a>
+					<a href={resolve('/login')} class="header-action header-action-secondary compact-action">
+						<span class="hidden sm:inline">Connexion</span>
+						<span class="sm:hidden">Connexion</span>
+					</a>
 				{/if}
 
-				<a href={resolve('/panier')} class="header-action header-cart">
-					<span class="sr-only">Panier</span>
-					Panier
+				<a href={resolve('/panier')} class="header-action header-cart compact-action">
+					<span class="hidden sm:inline">Panier</span>
+					<span class="sm:hidden" aria-hidden="true">🛒</span>
+					<span class="sr-only sm:hidden">Panier</span>
 					<span class="cart-badge" class:pulse={pulseActive}>{$cartCount}</span>
 				</a>
 			</div>
@@ -144,15 +156,23 @@
 		top: 0;
 		z-index: 50;
 		border-bottom: 1px solid rgb(var(--color-primary-rgb) / 0.08);
-		background: rgb(var(--color-white-rgb) / 0.78);
+		background: linear-gradient(
+			180deg,
+			rgb(var(--color-white-rgb) / 0.92),
+			rgb(var(--color-white-rgb) / 0.72)
+		);
 		backdrop-filter: blur(20px);
-		box-shadow: 0 10px 30px -28px rgb(var(--color-black-rgb) / 0.45);
+		box-shadow: var(--shadow-soft);
 	}
 
 	.brand-link {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.9rem;
+	}
+
+	.brand-link:hover .brand-mark {
+		transform: rotate(-4deg) scale(1.04);
 	}
 
 	.brand-mark {
@@ -165,7 +185,10 @@
 		color: var(--color-white);
 		font-size: 1.25rem;
 		font-weight: 900;
-		box-shadow: var(--shadow-button);
+		box-shadow:
+			var(--shadow-button),
+			inset 0 1px 0 rgb(255 255 255 / 0.16);
+		transition: transform var(--transition-standard);
 	}
 
 	.brand-lockup {
@@ -190,6 +213,7 @@
 	}
 
 	.nav-link {
+		position: relative;
 		border-radius: 999px;
 		padding: 0.55rem 0.9rem;
 		font-size: 0.88rem;
@@ -205,9 +229,26 @@
 		color: var(--color-black);
 	}
 
+	.nav-link::after {
+		content: '';
+		position: absolute;
+		left: 0.9rem;
+		right: 0.9rem;
+		bottom: 0.15rem;
+		height: 2px;
+		border-radius: 999px;
+		background: var(--color-secondary);
+		transform: scaleX(0);
+		transform-origin: left;
+		transition: transform var(--transition-standard);
+	}
+
 	.nav-link.active {
-		background: var(--gradient-primary);
-		color: var(--color-white);
+		color: var(--color-black);
+	}
+
+	.nav-link.active::after {
+		transform: scaleX(1);
 	}
 
 	.header-action {
@@ -224,6 +265,24 @@
 			border-color var(--transition-standard),
 			background-color var(--transition-standard),
 			filter var(--transition-standard);
+	}
+
+	@media (max-width: 639px) {
+		.compact-action {
+			padding: 0.55rem 0.75rem;
+			font-size: 0.78rem;
+		}
+
+		.header-cart.compact-action {
+			padding: 0.6rem 0.85rem;
+			margin-right: 0.35rem;
+		}
+	}
+
+	@media (max-width: 420px) {
+		.brand-lockup {
+			display: none;
+		}
 	}
 
 	.header-action-secondary {
@@ -286,6 +345,26 @@
 
 	.cart-badge.pulse {
 		animation: pulse-soft 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+
+	.cart-badge.pulse::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: 999px;
+		background: rgb(var(--color-secondary-rgb) / 0.55);
+		animation: ping-ring 620ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+
+	@keyframes ping-ring {
+		0% {
+			box-shadow: 0 0 0 0 rgb(var(--color-secondary-rgb) / 0.45);
+			opacity: 1;
+		}
+		100% {
+			box-shadow: 0 0 0 10px rgb(var(--color-secondary-rgb) / 0);
+			opacity: 0;
+		}
 	}
 
 	.site-footer {

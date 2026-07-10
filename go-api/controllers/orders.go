@@ -44,6 +44,25 @@ func (h *OrderHandler) FindOrder(c *gin.Context) {
 	RespondSuccess(c, http.StatusOK, orders)
 }
 
+func (h *OrderHandler) FindSellerStats(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	userID, err := userIDFromContext(c)
+	if err != nil {
+		RespondError(c, http.StatusUnauthorized, "AUTH_CONTEXT_INVALID", errorInvalidAuthenticationContext, nil)
+		return
+	}
+
+	stats, err := h.orderService.GetSellerStats(ctx, userID)
+	if err != nil {
+		logger.Error("Failed to fetch seller stats for user %d: %v", userID, err)
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch seller stats", nil)
+		return
+	}
+
+	RespondSuccess(c, http.StatusOK, stats)
+}
+
 func (h *OrderHandler) FindOneOrder(c *gin.Context) {
 	ctx := c.Request.Context()
 

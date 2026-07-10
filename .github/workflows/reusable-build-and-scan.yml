@@ -30,6 +30,8 @@ jobs:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
           IMAGE_NAMESPACE: ${{ env.IMAGE_NAMESPACE }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          BUILDX_CACHE_FROM: type=gha
+          BUILDX_CACHE_TO: type=gha,mode=max
         run: bash build/scripts/ci-build-images.sh
 
       - name: Set up Trivy

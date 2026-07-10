@@ -18,4 +18,10 @@ func SetupOrderRoutes(r *gin.Engine, orderHandler *controllers.OrderHandler, aut
 		orders.PUT("/:id", orderHandler.UpdateOrder)
 		orders.DELETE("/:id", orderHandler.DeleteOrder)
 	}
+
+	sellerStats := r.Group("/seller/stats")
+	sellerStats.Use(authMW.Authenticate())
+	{
+		sellerStats.GET("", orderHandler.FindSellerStats)
+	}
 }

@@ -44,6 +44,16 @@ const productForm = {
 	image: ''
 };
 
+const promotionForm = {
+	id: '9',
+	name: 'Promo Test',
+	description: 'Remise test',
+	type: PROMOTION_TYPE_PERCENTAGE,
+	value: '15',
+	is_active: 'true',
+	product_ids: '4'
+};
+
 describe('seller pages', () => {
 	it('protects seller pages from anonymous and admin users', async () => {
 		await expect(
@@ -242,10 +252,17 @@ describe('seller pages', () => {
 					'/seller/products': apiResponse([
 						{ ID: 4, name: 'Console', description: 'Retro', price: 10, image: '' }
 					]),
-					'/categories': apiResponse([{ ID: 3, name: 'Consoles' }])
+					'/categories': apiResponse([{ ID: 3, name: 'Consoles' }]),
+					'/promotions': apiResponse([]),
+					'/seller/stats': apiResponse({ total_revenue: 0, total_sales: 0, product_count: 1 })
 				})
 			} as never)
-		).resolves.toMatchObject({ products: [{ id: 4 }], categories: [{ id: 3 }] });
+		).resolves.toMatchObject({
+			products: [{ id: 4 }],
+			categories: [{ id: 3 }],
+			promotions: [],
+			stats: { productCount: 1 }
+		});
 	});
 
 	it('validates and creates a seller product', async () => {
@@ -330,7 +347,7 @@ describe('seller pages', () => {
 				request: requestWithForm('/mes-produits', productForm),
 				fetch: vi.fn(() => Promise.resolve(apiResponse({ ID: 4 })))
 			} as never)
-		).resolves.toMatchObject({ success: 'Produit mis a jour' });
+		).resolves.toMatchObject({ success: 'Produit modifie avec succes' });
 
 		await expect(
 			update({
@@ -369,12 +386,371 @@ describe('seller pages', () => {
 				request: requestWithForm('/mes-produits', { id: '4' }),
 				fetch: vi.fn(() => Promise.resolve(apiResponse({ message: 'ok' })))
 			} as never)
-		).resolves.toMatchObject({ success: 'Produit supprime' });
+		).resolves.toMatchObject({ success: 'Produit supprime avec succes' });
 
 		await expect(
 			deleteAction({
 				locals: { user },
 				request: requestWithForm('/mes-produits', { id: '4' }),
+				fetch: vi.fn(() =>
+					Promise.resolve(
+						new Response(JSON.stringify({ success: false, error: { message: 'Delete down' } }), {
+							status: 500
+						})
+					)
+				)
+			} as never)
+		).resolves.toMatchObject({ status: 500 });
+	});
+
+	it('removes the current image when updating a seller product', async () => {
+		const update = sellerProductActions.updateProduct!;
+
+		const removeOk = vi
+			.fn()
+			.mockResolvedValueOnce(apiResponse({ ID: 4 }))
+			.mockResolvedValueOnce(apiResponse({ message: 'ok' })) as unknown as typeof globalThis.fetch;
+		await expect(
+			update({
+				locals: { user },
+				request: requestWithForm('/mes-produits', {
+					...productForm,
+					removeImage: 'true',
+					currentImageName: 'console.png'
+				}),
+				fetch: removeOk
+			} as never)
+		).resolves.toMatchObject({ success: 'Produit et image mis a jour avec succes' });
+
+		const removeFails = vi
+			.fn()
+			.mockResolvedValueOnce(apiResponse({ ID: 4 }))
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ success: false, error: { message: 'Delete image down' } }), {
+					status: 500
+				})
+			) as unknown as typeof globalThis.fetch;
+		await expect(
+			update({
+				locals: { user },
+				request: requestWithForm('/mes-produits', {
+					...productForm,
+					removeImage: 'true',
+					currentImageName: 'console.png'
+				}),
+				fetch: removeFails
+			} as never)
+		).resolves.toMatchObject({ status: 500 });
+
+		const replaceImage = new File(['fake'], 'new-console.png', { type: 'image/png' });
+		const replaceOk = vi
+			.fn()
+			.mockResolvedValueOnce(apiResponse({ ID: 4 }))
+			.mockResolvedValueOnce(apiResponse({ ID: 4 })) as unknown as typeof globalThis.fetch;
+		await expect(
+			update({
+				locals: { user },
+				request: requestWithMultipart('/mes-produits', productForm, replaceImage),
+				fetch: replaceOk
+			} as never)
+		).resolves.toMatchObject({ success: 'Produit et image mis a jour avec succes' });
+
+		const replaceFails = vi
+			.fn()
+			.mockResolvedValueOnce(apiResponse({ ID: 4 }))
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ success: false, error: { message: 'Upload down' } }), {
+					status: 500
+				})
+			) as unknown as typeof globalThis.fetch;
+		await expect(
+			update({
+				locals: { user },
+				request: requestWithMultipart('/mes-produits', productForm, replaceImage),
+				fetch: replaceFails
+			} as never)
+		).resolves.toMatchObject({ status: 500 });
+	});
+
+	it('protects seller create-product and promotion mutation actions', async () => {
+		const create = sellerProductActions.createProduct!;
+		await expect(
+			create({
+				locals: { user: null },
+				request: requestWithForm('/mes-produits', {}),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/login' });
+		await expect(
+			create({
+				locals: { user: { id: 2, role: ADMIN_ROLE } },
+				request: requestWithForm('/mes-produits', {}),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/administration' });
+
+		const createPromotion = sellerProductActions.createPromotion!;
+		await expect(
+			createPromotion({
+				locals: { user: null },
+				request: requestWithForm('/mes-produits', {}),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/login' });
+		await expect(
+			createPromotion({
+				locals: { user: { id: 2, role: ADMIN_ROLE } },
+				request: requestWithForm('/mes-produits', {}),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/administration' });
+
+		const updatePromotion = sellerProductActions.updatePromotion!;
+		await expect(
+			updatePromotion({
+				locals: { user: { id: 2, role: ADMIN_ROLE } },
+				request: requestWithForm('/mes-produits', { id: '9' }),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/administration' });
+
+		const deletePromotion = sellerProductActions.deletePromotion!;
+		await expect(
+			deletePromotion({
+				locals: { user: { id: 2, role: ADMIN_ROLE } },
+				request: requestWithForm('/mes-produits', { id: '9' }),
+				fetch: vi.fn()
+			} as never)
+		).rejects.toMatchObject({ status: 303, location: '/administration' });
+	});
+
+	it('validates and creates a seller product from the dashboard', async () => {
+		const create = sellerProductActions.createProduct!;
+
+		await expect(
+			create({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { ...productForm, name: '' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			create({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { ...productForm, category_id: '0' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			create({
+				locals: { user },
+				request: requestWithForm('/mes-produits', {
+					...productForm,
+					promotion_active: 'true',
+					promotion_type: 'unknown'
+				}),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		const fetchMock = vi.fn(() =>
+			Promise.resolve(apiResponse({ ID: 12 }, 201))
+		) as unknown as typeof globalThis.fetch;
+		await expect(
+			create({
+				locals: { user },
+				request: requestWithForm('/mes-produits', productForm),
+				fetch: fetchMock
+			} as never)
+		).resolves.toMatchObject({ success: 'Produit ajoute avec succes' });
+		expect(fetchMock).toHaveBeenCalledOnce();
+
+		await expect(
+			create({
+				locals: { user },
+				request: requestWithForm('/mes-produits', productForm),
+				fetch: vi.fn(() =>
+					Promise.resolve(
+						new Response(JSON.stringify({ success: false, error: { message: 'API down' } }), {
+							status: 503
+						})
+					)
+				)
+			} as never)
+		).resolves.toMatchObject({ status: 503 });
+	});
+
+	it('creates a seller product with an image and handles upload failure', async () => {
+		const create = sellerProductActions.createProduct!;
+		const image = new File(['fake'], 'console.png', { type: 'image/png' });
+
+		const uploadOk = vi
+			.fn()
+			.mockResolvedValueOnce(apiResponse({ ID: 12 }, 201))
+			.mockResolvedValueOnce(apiResponse({ ID: 12 })) as unknown as typeof globalThis.fetch;
+		await expect(
+			create({
+				locals: { user },
+				request: requestWithMultipart('/mes-produits', productForm, image),
+				fetch: uploadOk
+			} as never)
+		).resolves.toMatchObject({ success: 'Produit et image ajoutes avec succes' });
+
+		const uploadFails = vi
+			.fn()
+			.mockResolvedValueOnce(apiResponse({ ID: 12 }, 201))
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ success: false, error: { message: 'Upload down' } }), {
+					status: 500
+				})
+			) as unknown as typeof globalThis.fetch;
+		await expect(
+			create({
+				locals: { user },
+				request: requestWithMultipart('/mes-produits', productForm, image),
+				fetch: uploadFails
+			} as never)
+		).resolves.toMatchObject({ status: 500 });
+
+		const invalidImage = new File(['fake'], 'notes.txt', { type: 'text/plain' });
+		await expect(
+			create({
+				locals: { user },
+				request: requestWithMultipart('/mes-produits', productForm, invalidImage),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+	});
+
+	it('creates, updates and deletes a seller promotion', async () => {
+		const createPromotion = sellerProductActions.createPromotion!;
+
+		await expect(
+			createPromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { ...promotionForm, name: '' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			createPromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { ...promotionForm, type: 'unknown' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			createPromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', {
+					...promotionForm,
+					type: PROMOTION_TYPE_PERCENTAGE,
+					value: '150'
+				}),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			createPromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { ...promotionForm, product_ids: '' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		let capturedBody: unknown;
+		const createFetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+			capturedBody = init?.body ? JSON.parse(String(init.body)) : null;
+			return Promise.resolve(apiResponse({ ID: 9 }, 201));
+		}) as unknown as typeof globalThis.fetch;
+		await expect(
+			createPromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', promotionForm),
+				fetch: createFetch
+			} as never)
+		).resolves.toMatchObject({ success: 'Promotion ajoutee avec succes' });
+		expect(capturedBody).toMatchObject({ applies_to_all: false, product_ids: [4] });
+
+		await expect(
+			createPromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', promotionForm),
+				fetch: vi.fn(() =>
+					Promise.resolve(
+						new Response(JSON.stringify({ success: false, error: { message: 'API down' } }), {
+							status: 503
+						})
+					)
+				)
+			} as never)
+		).resolves.toMatchObject({ status: 503 });
+
+		const updatePromotion = sellerProductActions.updatePromotion!;
+		await expect(
+			updatePromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { ...promotionForm, id: '' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			updatePromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { ...promotionForm, name: '' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			updatePromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', promotionForm),
+				fetch: vi.fn(() => Promise.resolve(apiResponse({ ID: 9 })))
+			} as never)
+		).resolves.toMatchObject({ success: 'Promotion modifiee avec succes' });
+
+		await expect(
+			updatePromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', promotionForm),
+				fetch: vi.fn(() =>
+					Promise.resolve(
+						new Response(JSON.stringify({ success: false, error: { message: 'Update down' } }), {
+							status: 503
+						})
+					)
+				)
+			} as never)
+		).resolves.toMatchObject({ status: 503 });
+
+		const deletePromotion = sellerProductActions.deletePromotion!;
+		await expect(
+			deletePromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { id: '' }),
+				fetch: vi.fn()
+			} as never)
+		).resolves.toMatchObject({ status: 400 });
+
+		await expect(
+			deletePromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { id: '9' }),
+				fetch: vi.fn(() => Promise.resolve(apiResponse({ message: 'ok' })))
+			} as never)
+		).resolves.toMatchObject({ success: 'Promotion supprimee avec succes' });
+
+		await expect(
+			deletePromotion({
+				locals: { user },
+				request: requestWithForm('/mes-produits', { id: '9' }),
 				fetch: vi.fn(() =>
 					Promise.resolve(
 						new Response(JSON.stringify({ success: false, error: { message: 'Delete down' } }), {

@@ -13,5 +13,5 @@ data:
   GIN_MODE: "release"
   API_BASE_URL: "http://go-api:8080"
   API_PUBLIC_BASE_URL: "https://collector-api.romainnigond.fr"
-  STRIPE_ENABLED: "false"
+  STRIPE_ENABLED: "true"
   STRIPE_CHECKOUT_ALLOWED_ORIGINS: "https://collector-app.romainnigond.fr"
