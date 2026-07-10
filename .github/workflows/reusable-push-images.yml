@@ -50,6 +50,8 @@ jobs:
           context: .
           file: build/docker/go-api.Dockerfile
           push: true
+          cache-from: type=gha,scope=go-api
+          cache-to: type=gha,mode=max,scope=go-api
           tags: |
             docker.io/${{ env.DOCKERHUB_USERNAME }}/go-api:${{ env.IMAGE_TAG }}
             docker.io/${{ env.DOCKERHUB_USERNAME }}/go-api:latest
@@ -61,6 +63,8 @@ jobs:
           context: .
           file: build/docker/collector-spa.Dockerfile
           push: true
+          cache-from: type=gha,scope=collector-spa
+          cache-to: type=gha,mode=max,scope=collector-spa
           tags: |
             docker.io/${{ env.DOCKERHUB_USERNAME }}/collector-spa:${{ env.IMAGE_TAG }}
             docker.io/${{ env.DOCKERHUB_USERNAME }}/collector-spa:latest
