@@ -45,7 +45,7 @@ jobs:
 
       - name: Publish go-api image
         if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: build/docker/go-api.Dockerfile
@@ -58,7 +58,7 @@ jobs:
 
       - name: Publish collector-spa image
         if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: build/docker/collector-spa.Dockerfile
