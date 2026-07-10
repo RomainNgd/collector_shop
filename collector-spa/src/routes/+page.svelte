@@ -22,8 +22,7 @@
 				<a href={resolve('/catalogue')} class="theme-button theme-button-primary">
 					Voir le catalogue
 				</a>
-				<span class="theme-pill theme-pill-contrast"
-					>{data.products.length} pieces disponibles</span
+				<span class="theme-pill theme-pill-contrast">{data.products.length} pieces disponibles</span
 				>
 			</div>
 		</div>

@@ -102,7 +102,10 @@
 						</button>
 					</form>
 				{:else}
-					<a href={resolve('/auth/register')} class="header-action header-action-primary compact-action">
+					<a
+						href={resolve('/auth/register')}
+						class="header-action header-action-primary compact-action"
+					>
 						<span class="hidden sm:inline">Inscription</span>
 						<span class="sm:hidden">S'inscrire</span>
 					</a>
